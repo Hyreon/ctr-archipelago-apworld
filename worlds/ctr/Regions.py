@@ -16,7 +16,6 @@ from .warp_pad_logic import (
     _COLOURS, _RELIC_TIERS,
 )
 from .relic_tiers import RELIC_TIERS, tier_location_pool
-from .Options import OxideGoal
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import ctrAPWorld
@@ -34,18 +33,6 @@ logger = logging.getLogger(__name__)
 
 # Boss-garage trophy thresholds (vanilla 4/8/12/16). Oxide stays keys.
 BOSS_TROPHY = {"ripper_roo": 4, "papu_papu": 8, "komodo_joe": 12, "pinstripe": 16}
-
-# Retail boss-race destination tracks. Keep every boss-derived route keyed
-# through this table: a later boss-shuffle feature can replace the mapping in
-# one place. Both N. Oxide challenges launch from the same garage and load
-# Oxide Station, so they share its single garage-to-destination graph edge.
-BOSS_WUMPA_TRACKS = {
-    "Ripper Roo Garage": "Roo's Tubes",
-    "Papu Papu Garage": "Papu's Pyramid",
-    "Komodo Joe Garage": "Dragon Mines",
-    "Pinstripe Garage": "Hot Air Skyway",
-    "N. Oxide Garage": "Oxide Station",
-}
 
 # Vanilla race-track LevelIDs that belong to each boss's hub, in the same
 # 0..15 numbering native + Icebound use (verified against
@@ -469,26 +456,11 @@ def create_regions(world: "ctrAPWorld"):
         _relic_removed_names |= (_pool - _keep)
 
     _displaced_cup_regions = set(displaced_cups(world.custom_tracks))
-    # Issue #320: `oxide_goal: disabled` removes Oxide's two races from the
-    # SEED, not merely from the goal. They are skipped exactly the way the
-    # relic-tier draw skips its unkept Time Trials above -- "registered but not
-    # created": both names keep their frozen datapackage ids (nothing moves,
-    # test_name_freeze / test_item_id_stability stay green), they simply never
-    # get a Location object, so fill cannot seat anything on them and
-    # accessibility 'full' has nothing behind the permanently shut garage to
-    # demand. Making them merely EXCLUDED or unreachable instead would leave
-    # two checks the player can never send, which is what #320 forbids.
-    _oxide_removed_names = set()
-    if not OxideGoal.oxide_content_present(opts.oxide_goal.value):
-        _oxide_removed_names = {
-            "N. Oxide Garage: N. Oxide's Challenge",
-            "N. Oxide Garage: N. Oxide's Final Challenge",
-        }
     for reg in data["regions"]:
         region = region_lookup[reg["name"]]
         for loc_data in reg.get("locations", []):
             name = loc_data["name"]
-            if name in _relic_removed_names or name in _oxide_removed_names:
+            if name in _relic_removed_names:
                 continue
             # A selected custom race replaces the cup's AP check identity, not
             # merely its bytes.  The cup's Gem item may still be shuffled into
@@ -561,8 +533,7 @@ def create_regions(world: "ctrAPWorld"):
     # rule of its own, because reaching ten fruit is possible in any race from
     # sphere 0, so `True` is the honest access rule rather than a placeholder.
     # In `per_track` mode a retail check is track-owned but can fire through
-    # its standalone race, any Gem Cup that legs the track, or the boss garage
-    # that races on it. AP-core
+    # either its standalone race or any Gem Cup that legs the track. AP-core
     # ANDs a location with its parent region, so the same joint dead-end-region
     # shape used by podium rungs is required here: connect the track region and
     # each legging Cup to "<track>: Wumpa", then put only that Wumpa location
@@ -588,9 +559,6 @@ def create_regions(world: "ctrAPWorld"):
             _sources += [region_lookup[_cup]
                          for _cup in _wumpa_track_cups.get(_region_name, [])
                          if _cup in region_lookup]
-            _sources += [region_lookup[_garage]
-                         for _garage, _track in BOSS_WUMPA_TRACKS.items()
-                         if _track == _region_name and _garage in region_lookup]
             for _source in _sources:
                 _ent = Entrance(player=player,
                                 name=f"{_source.name} -> {_region.name}",

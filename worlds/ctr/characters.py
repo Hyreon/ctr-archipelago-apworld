@@ -461,8 +461,9 @@ def resolve_racer_locks(world) -> Dict[str, str]:
     if n <= 0:
         return {}
     chosen_pads = world.random.sample(pads, n)
-    candidates = [c for c in ROSTER if c != world.ctr_starting_character]
-    return {pad: world.random.choice(candidates) for pad in sorted(chosen_pads)}
+    candidates = [c for c in ROSTER]
+    world.random.shuffle(candidates)
+    return {pad: candidates.pop() for pad in sorted(chosen_pads)}
 
 
 def racer_lock_counts(world) -> Tuple[int, int]:

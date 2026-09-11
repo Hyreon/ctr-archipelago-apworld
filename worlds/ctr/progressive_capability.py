@@ -44,6 +44,31 @@ ROSTER: Tuple[str, ...] = (
 )
 assert len(ROSTER) == 16
 
+# ((base game stats), (low but fair starting stats, chosen by author), (saphi stats))
+STATS_FAST = ((3, 0, 0), (2, 0, 0), (3, 3, 0))  # +4
+STATS_ACCEL = ((2, 3, 1), (0, 2, 1), (3, 3, 1))  # +4
+STATS_BALANCED = ((1, 1, 2), (1, 1, 1), (3, 3, 2))  # +5
+STATS_TURN = ((0, 2, 3), (0, 1, 2), (3, 3, 3))  # +6
+
+ROSTER_MAP = {
+    "Crash Bandicoot": STATS_BALANCED,
+    "Coco Bandicoot": STATS_ACCEL,
+    "Polar": STATS_TURN,
+    "Pura": STATS_TURN,
+    "Neo Cortex": STATS_BALANCED,
+    "N. Tropy": STATS_FAST,
+    "Ripper Roo": STATS_TURN,
+    "Papu Papu": STATS_FAST,
+    "Komodo Joe": STATS_BALANCED,
+    "Pinstripe": STATS_ACCEL,
+    "Dingodile": STATS_FAST,
+    "Tiny Tiger": STATS_FAST,
+    "N. Gin": STATS_ACCEL,
+    "Fake Crash": STATS_BALANCED,
+    "Nitros Oxide": STATS_ACCEL,
+    "Penta Penguin": STATS_TURN
+}
+
 STAT_CHAINS: Tuple[str, ...] = (
     "Progressive Top Speed", "Progressive Acceleration", "Progressive Turning",
 )
@@ -122,8 +147,8 @@ def created_item_counts(world) -> Dict[str, int]:
             out[stat_item_name(chain)] = STAT_COPIES_PER_CHAIN
     elif o.progressive_stats.value == 2:  # per_character
         for character in ROSTER:
-            for chain in STAT_CHAINS:
-                out[stat_item_name(chain, character)] = STAT_COPIES_PER_CHAIN
+            for i,chain in enumerate(STAT_CHAINS):
+                out[stat_item_name(chain, character)] = ROSTER_MAP[character][i][2]  # upgrade to saphi version
     return out
 
 

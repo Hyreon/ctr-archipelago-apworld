@@ -543,14 +543,8 @@ class ctrAPWorld(World):
                 # stage 2. This re-install only reassigns loc.access_rule closures
                 # and consumes no multiworld.random (verified) -- so the terminal
                 # backstop's replay fidelity survives it.
-                from .Rules import add_lettersanity_rules, add_time_trial_and_ctr_requirements
+                from .Rules import add_time_trial_and_ctr_requirements
                 add_time_trial_and_ctr_requirements(self, self.player)
-                # The reinstall above deliberately replaces the CTR Token and
-                # created letter rules. Restore every Lettersanity layer after
-                # it: token letter receipts, per-location physical gates, and
-                # the mode-2 own-letter guard. Universal Tracker skips this
-                # collapse path and already builds these layers in set_rules.
-                add_lettersanity_rules(self, self.player)
                 from .warp_pad_logic import warn_stage2_collapsed
                 n = len(self.multiworld.worlds)
                 warn_stage2_collapsed(
@@ -1013,14 +1007,7 @@ class ctrAPWorld(World):
         # branch below (a tier the player opted out of stays useful and the
         # forced_options supply guard raises instead). Kept in lockstep with
         # raise_if_full_accessibility_needs_more_sapphires_than_created.
-        # Issue #320 acceptance 4: with `oxide_goal: disabled` the Final
-        # Challenge LOCATION is never created, so accessibility 'full' has no
-        # relic gate here to make reachable and the configured unlock mode +
-        # count must not steer item classification. The Slide Coliseum
-        # sapphire gate above is a separate, still-live relic gate and is
-        # unaffected. Kept in lockstep with the matching skips in
-        # forced_options.py's two relic-supply guards.
-        if access_full and OxideGoal.oxide_content_present(o.oxide_goal.value):
+        if access_full:
             for tier in self._oxide_goal_tiers():
                 if self._ctr_relic_created.get(tier, 0) > 0:
                     prog[tier] = True
@@ -1213,12 +1200,7 @@ class ctrAPWorld(World):
             # location and stays a normal, fillable check (issue #152 C8).
             self._exclude_goal_location(
                 player, "N. Oxide Garage: N. Oxide's Final Challenge")
-        # option_none and option_disabled (issue #320): Oxide is not a
-        # completion condition, so no predicate and no event. Under
-        # `none` both races stay in the seed as ordinary optional
-        # checks; under `disabled` create_regions never created them.
-        # Either way the seed finishes on its remaining Boss/Gem arms
-        # and native rolls the credits from the hub (#244).
+        # option_none: no Oxide predicate, nothing to lay.
 
         if o.bosses_required_goal.value > 0:
             # Pair each real Boss Race location with a companion event of the same
@@ -1416,6 +1398,33 @@ class ctrAPWorld(World):
                 )
                 _cups_locked[_gem_name] = _cups_locked.get(_gem_name, 0) + 1
 
+        # --- Lettersanity direct assignment (#227 follow-up) ---
+        # CTR Letter locations are a fully closed, non-progression subsystem: this
+        # seed creates exactly as many trap+filler items as it has Letter locations
+        # for (20 traps + 28 Wumpa == 48 == the full lettersanity location count),
+        # so there is nothing to search for. Locking directly is both faster (no
+        # swap search ever touches this subset) and strictly safer than routing it
+        # through the general fill with a traps-only item_rule -- see the #227
+        # postmortem (FillError: 18 locations short when supply and demand didn't
+        # match under the old approach).
+        _letter_locations = list(LETTERSANITY_CLASS.created_location_names(self.options))
+        self.random.shuffle(_letter_locations)
+        _n_locked = min(48, len(_letter_locations))
+        # Keep the 20:28 trap:wumpa ratio even when letters_per_track shrank the
+        # location count below 48, so a partial seed still gets a proportional mix
+        # rather than draining traps first and wumpa never.
+        _n_locked_traps = round(_n_locked * 20 / 48)
+        _n_locked_wumpa = _n_locked - _n_locked_traps
+
+        _letter_fillers = (
+            [self.create_item(name) for name in traps.draw_trap_names(self, _n_locked_traps)]
+            + [self.create_item(wumpa_family.draw_filler_name(self))
+            for _ in range(_n_locked_wumpa)]
+        )
+        self.random.shuffle(_letter_fillers)
+        for _loc_name, _item in zip(_letter_locations, _letter_fillers):
+            mw.get_location(_loc_name, player).place_locked_item(_item)
+
         # Resolved once, before the pool loop reads it per item: how many copies
         # of each supply-spending wumpa name this seed creates. Empty dict when
         # the ladder is off, so the loop's lookup is a cheap miss.
@@ -1604,6 +1613,7 @@ class ctrAPWorld(World):
         # every multi-CTR generation with a filler-needing config. Solo unchanged
         # (there len(pool) == len(mw.itempool)).
         n_filler = max(0, unfilled - len(pool))
+
         # Trap fill: replace trap_fill_percentage% of the filler slots with traps,
         # drawn against the player's trap_weights (#280 -- the uniform v1 draw is
         # gone). Traps are non-progression, so this never changes reachability at
@@ -1886,17 +1896,7 @@ class ctrAPWorld(World):
         # destination keys. Schema 8 is unconditional for the public Alpha6
         # pair, following the standing "always bump, never conditionally" rule.
         custom_tracks = resolved_custom_tracks(self)
-        # schema_version 9 (0.2.0 RC, issue #320): `goal_oxide` gains the value
-        # 3 (`disabled`). The bump is a native-version GATE, not bookkeeping: a
-        # schema-8 client reads 3 through AP_ComposedGoalMet's else-if chain,
-        # correctly contributes no Oxide completion arm -- and then leaves the
-        # garage WIDE OPEN, because its AP_OxideEntryReady only special-cased
-        # value 0. It would also still expect the two Oxide location checks
-        # this seed no longer contains. Reusing schema 8 would hide that
-        # mismatch from the player instead of raising the #8 newer-schema
-        # warning. Unconditional per the Q28 standing ruling ("ALWAYS BUMP...
-        # no conditional emission"), so every 0.2.0 RC seed declares 9.
-        schema = 9
+        schema = 8
         slot_data: Dict[str, object] = {
             "Seed": self.multiworld.seed_name,
             "Slot": self.multiworld.player_name[self.player],
@@ -1910,8 +1910,7 @@ class ctrAPWorld(World):
             # #8 newer-schema warn/refuse. (v5 = oxide-final relic-goal mode/count;
             # v4 = relic-tier colour + goal-rework; v3 = podium + stage-2 padgate;
             # v2 = two-stage contract; v7 = gem_cup_legs; v8 = custom_tracks
-            # support and the public Alpha6 pair gate; v9 = goal_oxide value 3
-            # (`disabled`), all unconditional.)
+            # support and the public Alpha6 pair gate, both unconditional.)
             "schema_version": schema,
             "ctr_options": {
                 "schema_version": schema,

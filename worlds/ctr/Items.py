@@ -4,6 +4,42 @@ from BaseClasses import ItemClassification
 from typing import List, TYPE_CHECKING, TypedDict
 
 
+# --- "Major" item classification for placement-time exclusion (#227) --------
+# Item Box checks (#109) and CTR Letter pickups are the MINOR location pools:
+# they may receive Letters, Traps, Wumpa, and minor Progressive/modifier
+# items, but never one of these. This is a NAME set, not derived from
+# ItemClassification -- Letters and the weapon "Items" pool are BOTH
+# `progression` in data/items.json, so classification alone cannot separate
+# "major" from "minor" here. See Rules.add_minor_pool_item_rules.
+_MAJOR_CHARACTERS = (
+    "Crash Bandicoot", "Coco Bandicoot", "Polar", "Pura", "Neo Cortex",
+    "N. Tropy", "Ripper Roo", "Papu Papu", "Komodo Joe", "Pinstripe",
+    "Dingodile", "Tiny Tiger", "N. Gin", "Fake Crash", "Nitros Oxide",
+    "Penta Penguin",
+)
+
+_MAJOR_WEAPON_ITEMS = (
+    "Turbo", "Bomb", "Missile", "TNT", "Beaker", "Shield Bubble", "Mask",
+    "N. Tropy Clock", "Warpball", "Bomb x3", "Missile x3",
+)
+
+_MAJOR_RELICS = ("Sapphire Relic", "Gold Relic", "Platinum Relic")
+
+CTR_TOKEN_NAMES = (
+    "Red CTR Token", "Green CTR Token", "Blue CTR Token",
+    "Yellow CTR Token", "Purple CTR Token",
+)
+
+_MAJOR_GEMS = ("Red Gem", "Green Gem", "Blue Gem", "Yellow Gem", "Purple Gem")
+
+_MAJOR_UPGRADES = ("Ignore Grass", "Ignore Dirt", "Ignore Water", "Ignore Ice", "Ignore Snow", "Tizi Helper")
+
+MAJOR_ITEM_NAMES = frozenset(
+    ("Trophy", "Key")
+    + _MAJOR_RELICS + _MAJOR_GEMS + _MAJOR_UPGRADES
+    + _MAJOR_CHARACTERS + _MAJOR_WEAPON_ITEMS
+)
+
 if TYPE_CHECKING:
     from . import ctrAPWorld
 

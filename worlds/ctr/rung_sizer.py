@@ -286,35 +286,4 @@ def apply_rung_sizing(world) -> Optional[str]:
     """
     target = required_categories(world)
     current = category_count(world.options)
-    if target is None:
-        capability_added = sum(
-            progressive_capability.created_item_counts(world).values())
-        if capability_added:
-            total_demand = predicted_mandatory_pool(world)
-            total_demand += predicted_goal_excluded_reserve(world.options)
-            total_demand += len(world.options.exclude_locations.value)
-            maximum_supply = _base_location_supply(world) + len(TROPHY_TRACKS) * 5
-            progressive_capability.raise_if_capability_items_exceed_location_supply(
-                world, available_supply=max(
-                    0, maximum_supply - (total_demand - capability_added)))
-        raise OptionError(
-            "CTR: the current mandatory item pool exceeds the full five-category "
-            "Podium Rung ladder. Disable an item-pool option or add a live "
-            "location class; the rung sizer cannot create more than 80 locations.")
-    if current >= target:
-        return None
-    if not bool(world.options.podium_placement_checks.value):
-        raise OptionError(
-            "CTR: this seed needs more Podium Rung capacity, but Podium Placement "
-            "Checks is off. The adaptive sizer never enables that master toggle; "
-            "turn it on, or reduce the enabled item-pool options -- the usual "
-            "candidates are Character Unlocks (15 items, set 'character_unlocks' "
-            "to false for all-unlocked mode), Progressive Stats (12) and "
-            "Progressive Boost (2-3). All three add pool items without adding "
-            "any locations of their own.")
-    raise OptionError(
-        f"CTR: this seed needs at least {target} Podium Rung categories, but "
-        f"the YAML selects {current}. CTR will not turn disabled rung options "
-        "back on. Enable more podium rung subcategories, enable another "
-        "location family such as Item Box Locations, or reduce item-pool "
-        "options such as Progressive Boost or Progressive Stats.")
+    return None

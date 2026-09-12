@@ -480,8 +480,8 @@ class ctrAPWorld(World):
         self.ctr_starting_character = characters.resolve_starting_character(self)
         from . import forced_options
         forced_options.apply(self)
-        self.box_count = rung_sizer.required_boxes(self)
-        rung_sizer.apply_rung_sizing(self, flex_locations = self.box_count)
+        podium_locations = rung_sizer.apply_rung_sizing(self)
+        self.box_count = rung_sizer.required_boxes(self, flex_locations=podium_locations)
 
     def create_regions(self):
         create_regions(self)
@@ -1311,8 +1311,6 @@ class ctrAPWorld(World):
         player = self.player
         mw = self.multiworld
         pool, unfilled = self.apply_item_pool_data(item_supply.compute_item_pool_data(self))
-
-
 
         if int(self.options.lettersanity.value) == 3 and len(pool) > unfilled:
             raise OptionError(

@@ -36,6 +36,7 @@ from . import turbo_grant
 from . import wumpa_family
 from . import characters
 from . import progressive_capability
+from . import item_supply
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,9 @@ def needed_locations(world):
     base -= len(world.options.exclude_locations.value)
     return demand - base
 
+def _locations_with_categories(categories):
+    return len(TROPHY_TRACKS) * categories
+
 def required_boxes(world, flex_locations = 0) -> Optional[int]:
     demand = needed_locations(world) + flex_locations
     available_boxes = len(ITEM_BOX_CLASS.created_locations(world.options))
@@ -189,7 +193,7 @@ def required_categories(world, flex_locations = 0) -> Optional[int]:
     demand = needed_locations(world) - flex_locations
     print("Needed / Claimed / Demand:", needed_locations(world), flex_locations, demand)
     minimum = next((categories for categories in range(6)
-                    if demand <= len(TROPHY_TRACKS) * categories), None)
+                    if demand <= _locations_with_categories(categories)), None)
     if minimum is None:
         return None
 
@@ -240,7 +244,7 @@ def apply_rung_sizing(world, flex_locations = 0) -> Optional[str]:
             "Podium Rung ladder. Disable an item-pool option or add a live "
             "location class; the rung sizer cannot create more than 80 locations.")
     if current >= target:
-        return None
+        return _locations_with_categories(target)
     if not bool(world.options.podium_placement_checks.value):
         raise OptionError(
             "CTR: this seed needs more Podium Rung capacity, but Podium Placement "

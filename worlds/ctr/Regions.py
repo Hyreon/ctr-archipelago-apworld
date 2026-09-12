@@ -612,7 +612,9 @@ def create_regions(world: "ctrAPWorld"):
     # item_boxes.created_location_names (placed count + shortcut_knowledge
     # tier); the per-slot item-term rules are installed in Rules.py.
     from .item_boxes import ITEM_BOX_CLASS
-    for _name, _code, _region_name in ITEM_BOX_CLASS.created_locations(opts):
+    from Utils import sample_preserving_order
+    box_locations = sample_preserving_order(world.random, ITEM_BOX_CLASS.created_locations(opts), world.box_count)
+    for _name, _code, _region_name in box_locations:
         _region = region_lookup[_region_name]
         _loc = create_location(player, _name, _region)
         _loc.type = "item_boxes"

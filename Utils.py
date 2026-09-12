@@ -1374,3 +1374,10 @@ def get_all_causes(ex: Exception) -> str:
     top = causes[-1]
     others = "".join(f"\n{' ' * (i + 1)}Which caused: {c}" for i, c in enumerate(reversed(causes[:-1])))
     return f"{top}{others}"
+
+def sample_preserving_order(rng, population, k):
+    """Random subset of size k, in the SAME relative order as the input."""
+    n = len(population)
+    k = min(k, n)
+    indices = sorted(rng.sample(range(n), k))
+    return [population[i] for i in indices]

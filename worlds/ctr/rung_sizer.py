@@ -26,7 +26,9 @@ from .Items import load_item_table
 from .Locations import CTR_LOCATION_CLASSES, _LOCATION_DATA
 from .elastic_bounds import predicted_goal_excluded_reserve
 from .itemsanity import ITEMSANITY_CLASS, ITEM_NAMES as ITEMSANITY_ITEM_NAMES
+from .lettersanity import LETTERSANITY_CLASS, ITEM_NAMES as LETTERSANITY_ITEM_NAMES
 from .podium import PODIUM_CLASS, TROPHY_TRACKS, created_rung_keys
+from .item_boxes import ITEM_BOX_CLASS
 from .relic_tiers import RELIC_TIERS
 from .tizi_helper import TIZI_HELPER_ITEM
 from . import tizi_helper
@@ -131,87 +133,18 @@ def _base_location_supply(world) -> int:
     other_classes = sum(
         len(location_class.created_locations(world.options))
         for location_class in CTR_LOCATION_CLASSES
-        if location_class is not PODIUM_CLASS)
+        if location_class is not PODIUM_CLASS
+        and location_class is not ITEM_BOX_CLASS)
     return static_without_trials + relics + other_classes
 
 
 def predicted_mandatory_pool(world) -> int:
-    """Mandatory, non-comfort item count before filler.
-
-    This mirrors the count adjustments in ``create_items`` without building
-    locations. Locked vanilla rewards remove the same number of locations and
-    pool items, so they remain balance-neutral. The five terrain comfort items
-    are intentionally omitted: ``create_items`` trims that elastic pack when
-    space is tight, while this function sizes only mandatory demand.
-    """
-    counts = {item["name"]: item["count"] for item in load_item_table()}
-    for _label, relic_name, _option_name in RELIC_TIERS:
-        counts[relic_name] = world._ctr_relic_created.get(relic_name, 0)
-
-    gem_goal = world.options.gems_required_goal.value > 0
-    if not world.options.shuffle_gems.value:
-        for name in _GEM_NAMES:
-            counts[name] = 0
-    elif not world.options.include_gem_cups.value and not gem_goal:
-        for name in _GEM_NAMES:
-            counts[name] = 0
-    if not world.options.shuffle_keys.value:
-        counts["Key"] = 0
-    if not world.options.include_battle_arenas.value:
-        counts["Purple CTR Token"] = max(0, counts["Purple CTR Token"] - 4)
-    # #145 itemsanity: the 11 weapon items are frozen at count 0 in the
-    # static table and create_items activates exactly one of each when the
-    # toggle is on. Without this mirror the predictor under-counts mandatory
-    # demand by 11 in exactly the seeds that also add 22 locations to supply,
-    # over-estimating slack -- the wrong direction, a sizer that fails to
-    # expand when it should (DeepSeek review F1, 2026-08-11).
-    if ITEMSANITY_CLASS.is_enabled(world.options):
-        for name in ITEMSANITY_ITEM_NAMES:
-            counts[name] = 1
-
-    # Tizi Helper (#223) ships count 0 in data/items.json and create_items
-    # activates exactly one copy when its option is on, and it carries no
-    # location of its own -- the same shape as the itemsanity weapons above and
-    # the character unlocks below, both of which are mirrored here. Without this
-    # mirror the predictor under-counts mandatory demand by one on exactly the
-    # tightest seeds, which is the sizer-fails-to-expand direction (DeepSeek
-    # review F1's lesson, 2026-08-11). The docstring's promise that this
-    # function mirrors create_items is what makes the omission a defect rather
-    # than a choice.
-    #
-    # Turbo Grant (#224) is the same shape and belongs here too; it is added on
-    # its own branch, where the item exists.
-    counts[TIZI_HELPER_ITEM] = tizi_helper.created_item_count(world)
-    counts[turbo_grant.TURBO_GRANT_ITEM] = turbo_grant.created_item_count(world)
-
-    # The starting-wumpa ladder, same shape and same failure direction: up to
-    # ten copies of one name, frozen at count 0 and created per option, adding
-    # ZERO locations to supply. Without this mirror the predictor under-counts
-    # mandatory demand by up to ten on a fully-laddered seed, which
-    # over-estimates slack and makes the sizer decline to expand when it should.
-    #
-    # The two wumpa BUNDLES are deliberately not counted: they are filler
-    # substitutes, so they consume the filler budget this function sizes against
-    # rather than adding to mandatory demand. Traps are excluded for the
-    # identical reason and always have been.
-    mandatory_extra_wumpa = wumpa_family.created_item_total(world)
-
+    data = item_supply.compute_item_pool_data(world)
     mandatory = sum(
-        count for name, count in counts.items()
-        # Wumpa Fruit is CTR's generic filler. Its table entry supplies the
-        # filler type, not one mandatory pool slot, so it must not consume
-        # rung capacity here.
-        if name != "Wumpa Fruit" and name not in _SURFACE_ITEM_NAMES and count > 0)
+        1 for name in data["pool_names"]
+        if name != "Wumpa Fruit" and name not in item_supply.SURFACE_ITEM_NAMES
+    )
     mandatory += sum(progressive_capability.created_item_counts(world).values())
-    # Character unlocks (#54/#209, R4). ALWAYS ON: every seed pools the 15
-    # racers you did not start as, and they add ZERO locations, so they are
-    # straight mandatory demand the sizer has to cover. The 16 names are frozen
-    # at count 0 in data/items.json (registered in the #177 superset, created
-    # per seed), exactly like the itemsanity weapons above -- so without this
-    # mirror the predictor under-counts mandatory demand by 15 on EVERY seed,
-    # which is the same failure direction DeepSeek review F1 caught for #145.
-    mandatory += len(characters.created_unlock_names(world))
-    mandatory += mandatory_extra_wumpa
     return mandatory
 
 
@@ -226,34 +159,40 @@ def _capability_packs_active(world) -> bool:
     return bool(world.options.progressive_boost.value or world.options.progressive_stats.value)
 
 
-def required_categories(world) -> Optional[int]:
-    """Smallest rung-category count that leaves one spare location.
-
-    ``None`` means the full five-category ladder cannot satisfy the current
-    live registry and item pool. The extra category above the arithmetic
-    minimum is the ruled working margin. The pre-box practical floor of three
-    remains only when Item Box Locations are off; authored boxes provide the
-    live surplus that made lower player-selected rung layouts exercisable.
-    """
+def needed_locations(world):
+    # The amount of locations that need to be provided.
+    # If this number is negative, the mandatory locations already
+    # provide more than what the game needs.
     demand = predicted_mandatory_pool(world)
     demand += predicted_goal_excluded_reserve(world.options)
-    demand += len(world.options.exclude_locations.value)
+    demand += world.options.expected_filler
     base = _base_location_supply(world)
+    base -= len(world.options.exclude_locations.value)
+    return demand - base
+
+def required_boxes(world, flex_locations = 0) -> Optional[int]:
+    demand = needed_locations(world) + flex_locations
+    available_boxes = len(ITEM_BOX_CLASS.created_locations(world.options))
+    if world.options.use_all_boxes:
+        return available_boxes
+    print("Demand / Available Boxes:", demand, available_boxes)
+    return max(0, min(demand, available_boxes))
+
+def required_categories(world, flex_locations = 0) -> Optional[int]:
+    """Smallest rung-category count that accounts for all needed items.
+
+    ``None`` means the full five-category ladder cannot satisfy the current
+    live registry and item pool.
+
+    flex_locations allows consideration for locations already ruled part of the game.
+    """
+    demand = needed_locations(world) - flex_locations
+    print("Needed / Claimed / Demand:", needed_locations(world), flex_locations, demand)
     minimum = next((categories for categories in range(6)
-                    if demand <= base + len(TROPHY_TRACKS) * categories), None)
+                    if demand <= len(TROPHY_TRACKS) * categories), None)
     if minimum is None:
         return None
-    if _capability_packs_active(world):
-        # Capability packs are the only live consumers that need the ruled
-        # working margin. Before authored boxes landed, a floor of three kept
-        # the tight C=2 boundary away from a one-location census discrepancy.
-        # Boxes are measured directly in `base`, so they make the downward half
-        # real: retain the one-category margin but do not force disabled rungs
-        # back into a box-backed seed.
-        margin = min(minimum + 1, 5)
-        if bool(world.options.box_locations.value):
-            return margin
-        return max(margin, 3)
+
     return minimum
 
 
@@ -277,14 +216,13 @@ def _select_layout(options, target: int) -> Optional[RungLayout]:
         -_held_category_count(row),
     ))
 
-
-def apply_rung_sizing(world) -> Optional[str]:
+def apply_rung_sizing(world, flex_locations = 0) -> Optional[str]:
     """Apply the ruled upward-only sizing policy, or raise clearly.
 
     This runs in ``generate_early`` before regions consume the podium toggles.
     A sufficient player layout is untouched and takes no random draw.
     """
-    target = required_categories(world)
+    target = required_categories(world, flex_locations = flex_locations)
     current = category_count(world.options)
     if target is None:
         capability_added = sum(

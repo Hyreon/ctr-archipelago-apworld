@@ -348,7 +348,11 @@ def add_item_box_rules(world, player):
     from .progressive_capability import (STAT_CHAINS, gate_satisfied,
                                          track_required_character)
 
-    created = set(ITEM_BOX_CLASS.created_location_names(world.options))
+    box_names = set([loc[0] for loc in ITEM_BOX_CLASS.all_locations()])
+    created = {
+        loc.name for loc in world.multiworld.get_locations(player)
+        if loc.name in box_names
+    }
     if not created:
         return
 

@@ -8,6 +8,7 @@ from .warp_pad_logic import DEFAULT_REQUIREMENT_WEIGHTS
 from .traps import (DEFAULT_TRAP_WEIGHTS, TRAP_WEIGHT_KEYS,
                     validate_trap_weights)
 from .custom_tracks import KNOWN_TRACK_IDS, validate_custom_tracks
+import math
 
 
 class OxideGoal(Choice):
@@ -1113,6 +1114,31 @@ class EditableStats(Choice):
     default = 0
 
 
+class UseAllBoxLocations(Toggle):
+    """By default, boxes will only be provided for non-filler items.
+    With this enabled, ALL boxes will be available, no matter how much filler this
+    would introduce to the multiworld."""
+    display_name = "Use All Archipelago Box Locations"
+
+class UseTerrainModifiers(Toggle):
+    """When enabled, 5 global terrain modifiers will be added to the pool.
+    Once acquired, these allow you to ignore the effects of one of: ice, snow, dirt, grass, water."""
+    display_name = "Use Terrain Modifiers"
+
+
+class ExpectedFiller(Range):
+    """How much filler the randomizer should add. This is not a minimum or a maximum, but a suggestion.
+
+    If there are more mandatory locations than mandatory items, there will be more filler.
+
+    There can and have been off-by-one errors during generation. If this happens, there will be less filler.
+
+    Note that setting this to low amounts of filler may cause generation to fail."""
+    display_name = "Required Filler Locations"
+    range_start = 0
+    range_end = 100
+    default = 1
+
 @dataclass
 class ctrAPOptions(PerGameCommonOptions):
 
@@ -1178,6 +1204,9 @@ class ctrAPOptions(PerGameCommonOptions):
     podium_any_position_rung: PodiumAnyPositionRung
     podium_held_rungs: PodiumHeldRungs
     podium_held_fifth_rung: PodiumHeldFifthRung
+    use_all_boxes: UseAllBoxLocations
+    expected_filler: ExpectedFiller
+    use_terrain_modifiers: UseTerrainModifiers
     # quality of life
     one_lap_cups: OneLapCups
     # deathlink

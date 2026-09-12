@@ -75,12 +75,6 @@ from . import traps
 from .traps import (ALL_TRAP_ITEM_NAMES, FROZEN_TRAP_ITEM_NAMES,
                     REWORK_TRAP_ITEM_NAMES, TRAP_ITEM_NAMES)
 
-# Comfort-only issues #14/#15 pack. It stays atomic when a reduced location
-# set cannot host all five, rather than emitting a seed-dependent subset.
-SURFACE_ITEM_NAMES = frozenset({
-    "Ignore Grass", "Ignore Dirt", "Ignore Snow", "Ignore Water", "Ignore Ice",
-})
-
 
 class ctrAPWeb(WebWorld):
     theme = "Party"
@@ -486,7 +480,8 @@ class ctrAPWorld(World):
         self.ctr_starting_character = characters.resolve_starting_character(self)
         from . import forced_options
         forced_options.apply(self)
-        rung_sizer.apply_rung_sizing(self)
+        self.box_count = rung_sizer.required_boxes(self)
+        rung_sizer.apply_rung_sizing(self, flex_locations = self.box_count)
 
     def create_regions(self):
         create_regions(self)
@@ -1261,268 +1256,63 @@ class ctrAPWorld(World):
         mw.completion_condition[player] = (
             lambda state, ps=tuple(predicates): all(p(state) for p in ps))
 
+    def finish_item_pool_data(world, data):
+        """The finishing touches on the item pool data. Every random
+        decision and late constraint is applied here, without affecting
+        the world itself."""
+
+        # Itemsanity early-weapon seed - this uses RNG, so it's outside
+        # of data
+        if world.options.itemsanity.value:
+            early_count = world.random.randint(1, 2)
+            for weapon in world.random.sample(WEAPONS, early_count):
+                data["early_items"][weapon] = 1
+
+
+    def apply_item_pool_data(self, data):
+        """Impure. Every real commitment lives here: assigns
+        world._ctr_relic_prog (this is the 'static way to handle attrib' --
+        the value travels as plain data through compute_item_pool_data and
+        only gets written onto world here, at the single point of actual
+        mutation), seeds early_items, installs the goal, places every locked
+        item, precollects the starting character, and only THEN constructs
+        real Item objects for the general pool -- object construction is
+        deliberately last and deliberately here, never in the pure function.
+        """
+        mw = self.multiworld
+        player = self.player
+
+        # Apply finishing touches that depend on RNG
+        finish_item_pool_data(self, data)
+
+        self._ctr_relic_prog = data["relic_progression_map"]
+
+        for item_name, count in data["early_items"].items():
+            mw.early_items.setdefault(player, {})[item_name] = count
+
+        # Same relative position as the original: before locked placements,
+        # since nothing in compute_item_pool_data depended on or altered
+        # anything _install_goal touches, so sequencing it here preserves the
+        # original ordering exactly.
+        self._install_goal(player)
+
+        for loc_name, item_name in data["locked_placements"].items():
+            mw.get_location(loc_name, player).place_locked_item(self.create_item(item_name))
+
+        mw.push_precollected(self.create_item(data["precollected"]))
+
+        pool = [self.create_item(name) for name in data["pool_names"]]
+
+        unfilled = len(mw.get_unfilled_locations(player))
+        return item_supply.shed_overflow(
+            pool, unfilled, item_supply.SURFACE_ITEM_NAMES, filler_floor=estimated_filler_reserve(self)), unfilled
+
     def create_items(self):
         player = self.player
         mw = self.multiworld
-        pool = []
+        pool, unfilled = self.apply_item_pool_data(item_supply.compute_item_pool_data(self))
 
-        # Per-seed relic classification (lever 1); consumed by create_item for every
-        # relic created below (pool + slider/goal pins). Computed once here so the
-        # whole create_items pass sees a single consistent map.
-        self._ctr_relic_prog = self._relic_progression_map()
 
-        # Vanilla-fill lever 2: in VANILLA warp-pad mode, seat the 4
-        # hub-backbone Keys into early spheres so greedy fill_restrictive cannot
-        # strand a Key in the zero-slack vanilla pool (the residual after lever 1).
-        # VANILLA-ONLY: randomized mode already has its pre_fill guard and must stay
-        # byte-identical, so it is untouched. Only meaningful when Keys are actually
-        # in the shuffled pool (shuffle_keys on); when off, Keys are pinned to boss
-        # races and never enter fill, so this is inert. early_items is a fill-order
-        # hint (distribute_early_items, allow_partial) -- it changes neither what is
-        # required nor any emitted slot_data value.
-        if (self.options.warppad_unlock_requirements.value == 0
-                and self.options.shuffle_keys.value):
-            mw.early_items.setdefault(player, {})["Key"] = 4
-
-        # Itemsanity's native crate filter returns Wumpa when the player has no
-        # received weapon.  Seed one or two distinct weapon types into early
-        # fill so an enabled seed has an opening weapon without granting it as
-        # starting inventory.  No RNG is consumed while the toggle is off.
-        if self.options.itemsanity.value:
-            early_count = self.random.randint(1, 2)
-            for weapon in self.random.sample(WEAPONS, early_count):
-                mw.early_items.setdefault(player, {})[weapon] = 1
-
-        self._install_goal(player)
-
-        # --- Relic-tier exact-count removal (issue #171 conversion; issue #28
-        # R1: removal, not pinning) ---
-        # generate_early's relic draw (relic_tiers.draw_relic_tier_keep) already
-        # decided exactly which of each tier's 18 Time Trial locations this seed
-        # creates (self._ctr_relic_keep), and Regions.create_regions already built
-        # Location objects for only those -- a below-count slot was never created
-        # at all, so unlike the pinned-vanilla block this replaces (used to sit
-        # here, __init__.py:849-902 on origin/main), there is no location left to
-        # place_locked_item onto. _relic_locked below exists purely so the general
-        # item-pool loop two blocks down creates (18 - n_created) fewer of that
-        # relic -- the exact same "keep item count == location count" invariant
-        # the old block's own n_locked bookkeeping maintained, just driven by the
-        # draw's created count instead of a per-location pin roll. The Turbo Track
-        # comfort guard is enforced inside the draw itself now (excluded from the
-        # sample pool, relic_tiers.draw_relic_tier_keep), so there is nothing
-        # left for create_items to force here.
-        _relic_locked = {
-            _relic_item: 18 - self._ctr_relic_created.get(_relic_item, 18)
-            for _tier_label, _relic_item, _opt_name in RELIC_TIERS
-        }
-
-        # --- Gem & Key placement toggles (item #5) ---
-        # Default OFF = pinned vanilla (each Gem locked to its Gem Cup, each Key
-        # locked to its Boss Race -> out of the multiworld pool). ON = the item
-        # enters the shuffled pool and its vanilla location becomes a normal check.
-        # Track n_locked per item name so the general pool below creates
-        # (count - n_locked) of it, keeping item count == location count.
-        # Issue #152 C6 (drift fix, folded into the composition per the
-        # dossier's Q30 ruling): renamed from the legacy `goal ==
-        # option_allgemcups` check to the composed `gems_required_goal > 0`
-        # condition. Behaviourally identical for what used to be reachable
-        # (the old Choice's allgemcups value maps onto gems_required_goal ==
-        # 5), and now correctly fires for any active Gems Required Goal
-        # count, not just "all 5".
-        _GEM_GOAL = self.options.gems_required_goal.value > 0
-        _gems_locked: Dict[str, int] = {}
-        _keys_locked: Dict[str, int] = {}
-        _vmap = json.loads(
-            pkgutil.get_data(__package__, "data/vanilla_mapping.json").decode("utf-8")
-        )["ShuffleOptions"]
-
-        # Gems: pin to gem-cup locations when shuffle_gems is OFF. When Gems
-        # Required Goal is active with shuffle off, gemgoal() already placed
-        # them (and place_locked_item on an already-filled location would
-        # raise), so skip the placement here for that goal -- the pool
-        # exclusion below still applies. Gems Required Goal + shuffle ON pins
-        # nothing anywhere: the gems ride the pool (2026-07-15 ruling).
-        if not self.options.shuffle_gems.value and not _GEM_GOAL:
-            for _loc_name, _gem_name in _vmap["Gems"].items():
-                _loc_name = replacement_trophy_location(
-                    resolved_custom_tracks(self), _loc_name)
-                mw.get_location(_loc_name, player).place_locked_item(
-                    self.create_item(_gem_name)
-                )
-                _gems_locked[_gem_name] = _gems_locked.get(_gem_name, 0) + 1
-
-        # Keys: pin to boss-race locations when shuffle_keys is OFF.
-        if not self.options.shuffle_keys.value:
-            for _loc_name, _key_name in _vmap["Boss Keys"].items():
-                mw.get_location(_loc_name, player).place_locked_item(
-                    self.create_item(_key_name)
-                )
-                _keys_locked[_key_name] = _keys_locked.get(_key_name, 0) + 1
-
-        # Battle arenas (issue #50): pin the vanilla Purple CTR Tokens onto the 4
-        # Crystal Bonus Round checks when include_battle_arenas is OFF.
-        #
-        # The option never removed those locations -- the four Crystal Bonus Round
-        # entries live unconditionally in data/world.json, so the location count is
-        # 213 with the option on and off alike. All the option did (Regions.py,
-        # warp_pad_logic) was keep the crystal pads out of the randomized-unlock
-        # pool. The checks themselves stayed live multiworld slots, and a 12-seed
-        # sample put a logic-required progression item on an arena check in 4 of
-        # them: the player is forced through content they explicitly opted out of.
-        #
-        # Pinning is the same contract the Gems / Boss Keys toggles above use:
-        # place_locked_item takes the location out of the multiworld pool and puts
-        # its vanilla item back on it, so nobody else's progression can be hidden
-        # there. The mapping already existed in data/vanilla_mapping.json and was
-        # read by nothing until now. Removing the locations outright would be the
-        # cleaner fix but is a native/location-table change, not apworld-only.
-        _arena_locked: Dict[str, int] = {}
-        if not self.options.include_battle_arenas.value:
-            for _loc_name, _token_name in _vmap["Bonus Round Tokens"].items():
-                mw.get_location(_loc_name, player).place_locked_item(
-                    self.create_item(_token_name)
-                )
-                _arena_locked[_token_name] = _arena_locked.get(_token_name, 0) + 1
-
-        # Gem cups (issue #50, sibling of the arena block above): pin the vanilla
-        # Gem onto each of the 5 "<Colour> Gem Cup: Gem" checks when
-        # include_gem_cups is OFF but shuffle_gems is ON. Same defect as the
-        # arenas: the option only keeps the cup warp pads vanilla-gated
-        # (Regions.py) -- the 5 cup locations stay unconditional in
-        # data/world.json, so with the Gems shuffled they are live multiworld
-        # slots and fill hid logic-required progression on them (measured 4 of a
-        # 12-seed sample). Pinning restores the vanilla Gem there and takes the
-        # slot out of the pool; the cups stay reachable in logic (their vanilla
-        # has('<Colour> CTR Token', 4) gate persists), so nothing softlocks.
-        #
-        # The three sibling configs are already covered elsewhere and must NOT
-        # double-pin (place_locked_item on a filled location raises):
-        #   - shuffle_gems OFF, gems_required_goal == 0: _gems_locked block
-        #     (above) pinned them.
-        #   - shuffle_gems OFF, gems_required_goal > 0: gemgoal() pinned them.
-        #   - shuffle_gems ON, gems_required_goal > 0: forbidden in
-        #     generate_early (raise_if_gems_required_goal_needs_excluded_cups
-        #     -- the goal Gems ride the pool, so pinning them onto opted-out
-        #     cups would strand the goal; the _GEM_GOAL guard below is the
-        #     belt-and-suspenders).
-        _cups_locked: Dict[str, int] = {}
-        if not self.options.include_gem_cups.value \
-                and self.options.shuffle_gems.value and not _GEM_GOAL:
-            for _loc_name, _gem_name in _vmap["Gems"].items():
-                _loc_name = replacement_trophy_location(
-                    resolved_custom_tracks(self), _loc_name)
-                mw.get_location(_loc_name, player).place_locked_item(
-                    self.create_item(_gem_name)
-                )
-                _cups_locked[_gem_name] = _cups_locked.get(_gem_name, 0) + 1
-
-        # Resolved once, before the pool loop reads it per item: how many copies
-        # of each supply-spending wumpa name this seed creates. Empty dict when
-        # the ladder is off, so the loop's lookup is a cheap miss.
-        _wumpa_counts = wumpa_family.created_item_counts(self)
-
-        # --- Create general item pool ---
-        # When Gems Required Goal is active, gemgoal() LOCKS the 5 gems at the
-        # gem-cup locations, so adding the same 5 gems from the item table again
-        # makes them redundant progression items: the pool then exceeds the
-        # available locations (gemgoal also consumes 5 cup locations) -> FillError
-        # ("N more progression items than locations") and an item/location count
-        # mismatch. Exclude the gems from the general pool for that goal (they
-        # are the goal items, placed at the cups). Seeds without Gems Required
-        # Goal active keep gems in the pool (Turbo Track's vanilla 5-gem gate
-        # needs them findable) UNLESS shuffle_gems pinned them, in which case
-        # _gems_locked subtracts them.
-        _GEMS = {"Red Gem", "Green Gem", "Blue Gem", "Yellow Gem", "Purple Gem"}
-        for item in load_item_table():
-            # Gems Required Goal: exclude the gems from the general pool ONLY
-            # when gemgoal() locked them onto their cups (shuffle_gems off) --
-            # adding them again would overflow the pool (see the note above).
-            # With shuffle_gems ON the gems stay in the pool: they are the goal
-            # items, hidden wherever the fill puts them (2026-07-15 ruling).
-            if _GEM_GOAL and not self.options.shuffle_gems.value \
-                    and item["name"] in _GEMS:
-                continue
-            count = item["count"]
-            if self.options.itemsanity.value and item["name"] in ITEM_NAMES:
-                count = 1
-            # Tizi Helper (#223): exactly one copy, only when the option is on.
-            # Same shape as the itemsanity line above -- the entry ships count 0
-            # in data/items.json and the option is what makes it real. It adds no
-            # location, so it is a straight +1 against this seed's supply; being
-            # here (before the #14/#15 comfort-pack trim and the character
-            # supply check) is what lets a deliberately reduced seed free a
-            # comfort slot for it instead of overflowing the pool.
-            if item["name"] == TIZI_HELPER_ITEM:
-                count = tizi_helper.created_item_count(self)
-            # The starting-wumpa ladder (2026-08-10 ruling): up to ten copies
-            # of ONE progressive name, per the #12/#13 convention. Like the
-            # helper above it carries no location of its own, so every copy is
-            # one otherwise-filler slot spent, and it sits here -- before the
-            # shedding tiers -- so a reduced seed can free a comfort slot for it
-            # rather than overflowing. The two wumpa BUNDLES are deliberately
-            # NOT here: they are filler substitutes drawn from the filler budget
-            # further down, so counting them as pool demand would double-count
-            # them against the supply check.
-            if item["name"] in _wumpa_counts:
-                count = _wumpa_counts[item["name"]]
-            # Turbo Grant (#224): same shape and the same supply reasoning as
-            # the helper above -- one copy when the option is on, no location of
-            # its own, and placed before the comfort-pack trim so a reduced seed
-            # frees a comfort slot for it rather than overflowing the pool.
-            if item["name"] == TURBO_GRANT_ITEM:
-                count = turbo_grant.created_item_count(self)
-            if int(self.options.lettersanity.value) in (2, 3) and item["name"] in lettersanity.ITEM_NAMES:
-                track = item["name"].rsplit("(", 1)[1][:-1]
-                letter = item["name"].split(" ", 2)[1]
-                count = int(int(self.options.lettersanity.value) == 3 or
-                            letter in self.options._lettersanity_selected[track])
-            if item["name"] in _relic_locked:                         # slider-pinned relics
-                count = max(0, count - _relic_locked[item["name"]])
-            if item["name"] in _gems_locked:                          # gems pinned vanilla
-                count = max(0, count - _gems_locked[item["name"]])
-            if item["name"] in _keys_locked:                          # keys pinned vanilla
-                count = max(0, count - _keys_locked[item["name"]])
-            if item["name"] in _arena_locked:                         # arenas pinned vanilla
-                count = max(0, count - _arena_locked[item["name"]])
-            if item["name"] in _cups_locked:                          # gem cups pinned vanilla
-                count = max(0, count - _cups_locked[item["name"]])
-            if count > 0:
-                for _ in range(count):
-                    pool.append(self.create_item(item["name"]))
-
-        # --- Character unlocks (issues #54 / #209, R4). ALWAYS ON: the
-        # character phase is core 0.2.0 content, not a toggle, so every seed
-        # puts the 15 racers you did not start as into the pool and pushes the
-        # one you did start as as precollected. They add ZERO locations, so
-        # they are a straight +15 against this seed's supply -- which is why
-        # they go in BEFORE the comfort-pack trim below rather than after it,
-        # so a deliberately reduced seed frees the five optional #14/#15
-        # comfort items for them instead of overflowing.
-        #
-        # Classification is per-seed (R17) and lives in create_item: progression
-        # when racer-locked pads are on, useful when they are off.
-        _start_character = self.ctr_starting_character
-        mw.push_precollected(self.create_item(
-            characters.unlock_item_name(_start_character)))
-        for _unlock_name in characters.created_unlock_names(self):
-            pool.append(self.create_item(_unlock_name))
-
-        # --- Overflow shedding (Stef's ruling, 2026-08-18): FILLER first, then
-        # the comfort pack, then refuse. The tiers, the reasoning and what is
-        # never shed all live in item_supply.shed_overflow, which is a pure
-        # function so every tier is reachable from a synthetic pool instead of
-        # only from a seed whose options happen to land on the right overflow.
-        # That testability is the point: the all-or-nothing behaviour this
-        # replaced survived because reaching it needed roughly a 1-in-500 seed.
-        #
-        # A returned pool may be SMALLER than `unfilled` (tier 2 drops the pack
-        # whole), which the filler top-up at the end of this method closes, and
-        # it may still be LARGER, which the general capacity guard below
-        # refuses.
-        unfilled = len(mw.get_unfilled_locations(self.player))
-        pool = item_supply.shed_overflow(
-            pool, unfilled, SURFACE_ITEM_NAMES,
-            filler_floor=estimated_filler_reserve(self))
 
         if int(self.options.lettersanity.value) == 3 and len(pool) > unfilled:
             raise OptionError(

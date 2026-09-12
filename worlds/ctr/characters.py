@@ -431,6 +431,54 @@ def eligible_lock_pads(world) -> List[str]:
         out.append(pad_name)
     return out
 
+def weighted_selection_chance(selection_counts, selection, weight_towards_diversity):
+    if weight_towards_diversity > 0:
+        reference = min(selection_counts.values())
+        relative_count = selection_counts[selection] - reference
+    else:
+        reference = max(selection_counts.values())
+        relative_count = reference - selection_counts[selection]
+
+    return (1 - abs(weight_towards_diversity)) ** relative_count
+
+def true_with_chance(world, chance):
+    if chance == 0:
+        return False
+    elif chance == 1:
+        return True
+    else:
+        return world.random.random() < chance
+
+def candidate_is_selected(world, candidate_selection_counts: Mapping[str, int], character: str) -> bool:
+    if world.options.pads_racer_diversity == 0:
+        return True  # no restrictions on characters by variety means all characters are always candidates
+
+    chance_to_select = weighted_selection_chance(candidate_selection_counts, character, world.options.pads_racer_diversity)
+    return true_with_chance(world, chance_to_select)
+
+def assign_racers_to_pads(world, chosen_pads: Iterable[str]) -> Dict[str, str]:
+
+    candidates = [
+        character
+        for character in ROSTER
+        if character != world.ctr_starting_character
+        or world.options.pads_allow_starting_character
+    ]
+    candidate_selection_counts = Counter({c: 0 for c in candidates})
+
+    pad_assignments = {}
+    for pad in sorted(chosen_pads):
+        current_candidates = [
+            character
+            for character in candidates
+            if candidate_is_selected(world, candidate_selection_counts, character)
+        ]
+        candidate_choice = world.random.choice(current_candidates)
+
+        candidate_selection_counts[candidate_choice] += 1
+        pad_assignments[pad] = candidate_choice
+
+    return pad_assignments
 
 def resolve_racer_locks(world) -> Dict[str, str]:
     """{pad exit name -> roster name required to enter it}.
@@ -442,9 +490,9 @@ def resolve_racer_locks(world) -> Dict[str, str]:
     reason: Rules.py, `fill_slot_data` and the spoiler must not be able to
     disagree about which pads are locked.
 
-    The required racer is never the starting character. A lock on the racer you
-    already have would be satisfied at spawn and would spend an eligible pad on
-    nothing.
+    Unless pads_allow_starting_character is on, the required racer is never the starting character.
+    A lock on the racer you already have would be satisfied at spawn, but may create a challenge
+    if you have few per-character upgrades.
 
     The player's `racer_locked_pads` count is a MAXIMUM: the seed takes
     `min(requested, eligible)`, so an ambitious request on a seed with few
@@ -461,8 +509,8 @@ def resolve_racer_locks(world) -> Dict[str, str]:
     if n <= 0:
         return {}
     chosen_pads = world.random.sample(pads, n)
-    candidates = [c for c in ROSTER if c != world.ctr_starting_character]
-    return {pad: world.random.choice(candidates) for pad in sorted(chosen_pads)}
+
+    return assign_racers_to_pads(world, chosen_pads)
 
 
 def racer_lock_counts(world) -> Tuple[int, int]:

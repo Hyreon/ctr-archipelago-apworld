@@ -124,7 +124,6 @@ def created_item_counts(world) -> Dict[str, int]:
         for character in ROSTER:
             for chain in STAT_CHAINS:
                 out[stat_item_name(chain, character)] = STAT_COPIES_PER_CHAIN
-    print("Item Counts:", sum(out.values()))
     return out
 
 

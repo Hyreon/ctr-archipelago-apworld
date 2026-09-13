@@ -33,7 +33,7 @@ from .Options import (ctrAPOptions, OxideGoal, FinalOxideUnlock,
                       create_option_groups)
 from . import characters
 from . import progressive_capability
-from . import rung_sizer
+from . import location_flexer
 from .spoiler_pad_map import changed_pad_destination_rows
 from . import version
 from .Regions import create_regions
@@ -480,8 +480,7 @@ class ctrAPWorld(World):
         self.ctr_starting_character = characters.resolve_starting_character(self)
         from . import forced_options
         forced_options.apply(self)
-        podium_locations = rung_sizer.apply_rung_sizing(self)
-        self.box_count = rung_sizer.required_boxes(self, flex_locations=podium_locations)
+        location_flexer.flex_locations(self)
 
     def create_regions(self):
         create_regions(self)
@@ -1283,7 +1282,7 @@ class ctrAPWorld(World):
         player = self.player
 
         # Apply finishing touches that depend on RNG
-        finish_item_pool_data(self, data)
+        self.finish_item_pool_data(data)
 
         self._ctr_relic_prog = data["relic_progression_map"]
 
@@ -1304,19 +1303,8 @@ class ctrAPWorld(World):
         pool = [self.create_item(name) for name in data["pool_names"]]
 
         unfilled = len(mw.get_unfilled_locations(player))
-        return item_supply.shed_overflow(
-            pool, unfilled, item_supply.SURFACE_ITEM_NAMES, filler_floor=estimated_filler_reserve(self)), unfilled
-
-    def create_items(self):
-        player = self.player
-        mw = self.multiworld
-        pool, unfilled = self.apply_item_pool_data(item_supply.compute_item_pool_data(self))
-
-        if int(self.options.lettersanity.value) == 3 and len(pool) > unfilled:
-            raise OptionError(
-                f"CTR: Lettersanity 'items_only' needs 48 spare filler slots, but this "
-                f"option combination has only {max(0, unfilled - (len(pool) - 48))}. "
-                "Enable more location checks or reduce other item packs.")
+        pool = item_supply.shed_overflow(
+            pool, unfilled, item_supply.SURFACE_ITEM_NAMES, filler_floor=estimated_filler_reserve(self))
 
         # --- Progressive Boost / Progressive Stats item packs (issues #12,
         # #13/#252). Classification is resolved per seed in create_item from
@@ -1335,6 +1323,20 @@ class ctrAPWorld(World):
             for _cap_name, _cap_count in _capability_counts.items():
                 for _ in range(_cap_count):
                     pool.append(self.create_item(_cap_name))
+                    data["dynamic_item_count"] -= 1
+
+        return pool, unfilled
+
+    def create_items(self):
+        player = self.player
+        mw = self.multiworld
+        pool, unfilled = self.apply_item_pool_data(item_supply.compute_item_pool_data(self))
+
+        if int(self.options.lettersanity.value) == 3 and len(pool) > unfilled:
+            raise OptionError(
+                f"CTR: Lettersanity 'items_only' needs 48 spare filler slots, but this "
+                f"option combination has only {max(0, unfilled - (len(pool) - 48))}. "
+                "Enable more location checks or reduce other item packs.")
 
         # The character-unlock capacity check (issues #54/#209, R4). It runs
         # AFTER every option-specific item family -- character unlocks, the

@@ -118,6 +118,7 @@ from . import turbo_grant
 from . import wumpa_family
 from . import characters
 from . import lettersanity
+from . import progressive_capability
 
 # Comfort-only issues #14/#15 pack. It stays atomic when a reduced location
 # set cannot host all five, rather than emitting a seed-dependent subset.
@@ -147,6 +148,7 @@ def compute_item_pool_data(world):
         "locked_placements": {},    # {location_name: item_name}
         "pool_names": [],           # [item_name, ...] -- general pool, NAMES only
         "precollected": None,       # item_name for starting character
+        "dynamic_item_count": 0
     }
 
     # Vanilla-fill lever 2: seat the 4 hub-backbone Keys early.
@@ -224,5 +226,8 @@ def compute_item_pool_data(world):
     result["precollected"] = characters.unlock_item_name(world.ctr_starting_character)
     pool_names.extend(characters.created_unlock_names(world))
 
+    result["dynamic_item_count"] = sum(progressive_capability.created_item_counts(world).values())
+
     result["pool_names"] = pool_names
+
     return result

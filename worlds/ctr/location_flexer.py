@@ -22,21 +22,11 @@ from typing import Iterable, Optional, Tuple
 
 from Options import OptionError
 
-from .Items import load_item_table
-from .Locations import CTR_LOCATION_CLASSES, _LOCATION_DATA
-from .elastic_bounds import predicted_goal_excluded_reserve
-from .itemsanity import ITEMSANITY_CLASS, ITEM_NAMES as ITEMSANITY_ITEM_NAMES
-from .lettersanity import LETTERSANITY_CLASS, ITEM_NAMES as LETTERSANITY_ITEM_NAMES
 from .podium import PODIUM_CLASS, TROPHY_TRACKS, created_rung_keys
-from .item_boxes import ITEM_BOX_CLASS
-from .relic_tiers import RELIC_TIERS
-from .tizi_helper import TIZI_HELPER_ITEM
-from . import tizi_helper
-from . import turbo_grant
-from . import wumpa_family
-from . import characters
-from . import progressive_capability
 from . import item_supply
+from .elastic_bounds import predicted_goal_excluded_reserve
+from .Locations import CTR_LOCATION_CLASSES, _LOCATION_DATA
+from .item_boxes import ITEM_BOX_CLASS
 
 logger = logging.getLogger(__name__)
 
@@ -143,9 +133,8 @@ def predicted_mandatory_pool(world) -> int:
     data = item_supply.compute_item_pool_data(world)
     mandatory = sum(
         1 for name in data["pool_names"]
-        if name != "Wumpa Fruit" and name not in item_supply.SURFACE_ITEM_NAMES
-    )
-    mandatory += sum(progressive_capability.created_item_counts(world).values())
+        if name != "Wumpa Fruit"
+    ) + data["dynamic_item_count"]
     return mandatory
 
 
@@ -171,18 +160,18 @@ def needed_locations(world):
     base -= len(world.options.exclude_locations.value)
     return demand - base
 
-def _locations_with_categories(categories):
+def _locations_given_rungs(categories):
     return len(TROPHY_TRACKS) * categories
 
-def required_boxes(world, flex_locations = 0) -> Optional[int]:
-    demand = needed_locations(world) + flex_locations
+def required_boxes(world, remaining_locations_needed) -> Optional[int]:
     available_boxes = len(ITEM_BOX_CLASS.created_locations(world.options))
+
     if world.options.use_all_boxes:
         return available_boxes
-    print("Demand / Available Boxes:", demand, available_boxes)
-    return max(0, min(demand, available_boxes))
 
-def required_categories(world, flex_locations = 0) -> Optional[int]:
+    return max(0, min(remaining_locations_needed, available_boxes))
+
+def required_categories(world, remaining_locations_needed) -> Optional[int]:
     """Smallest rung-category count that accounts for all needed items.
 
     ``None`` means the full five-category ladder cannot satisfy the current
@@ -190,14 +179,15 @@ def required_categories(world, flex_locations = 0) -> Optional[int]:
 
     flex_locations allows consideration for locations already ruled part of the game.
     """
-    demand = needed_locations(world) - flex_locations
-    print("Needed / Claimed / Demand:", needed_locations(world), flex_locations, demand)
     minimum = next((categories for categories in range(6)
-                    if demand <= _locations_with_categories(categories)), None)
-    if minimum is None:
-        return None
+                    if remaining_locations_needed <= _locations_given_rungs(categories)), None)
 
-    return minimum
+    desired_rungs = category_count(world.options)
+
+    if minimum is None:
+        return desired_rungs
+
+    return min(minimum, category_count(world.options))
 
 
 def _new_name_count(current: RungLayout, candidate: RungLayout) -> int:
@@ -220,43 +210,27 @@ def _select_layout(options, target: int) -> Optional[RungLayout]:
         -_held_category_count(row),
     ))
 
-def apply_rung_sizing(world, flex_locations = 0) -> Optional[str]:
-    """Apply the ruled upward-only sizing policy, or raise clearly.
 
-    This runs in ``generate_early`` before regions consume the podium toggles.
-    A sufficient player layout is untouched and takes no random draw.
-    """
-    target = required_categories(world, flex_locations = flex_locations)
-    current = category_count(world.options)
-    if target is None:
-        capability_added = sum(
-            progressive_capability.created_item_counts(world).values())
-        if capability_added:
-            total_demand = predicted_mandatory_pool(world)
-            total_demand += predicted_goal_excluded_reserve(world.options)
-            total_demand += len(world.options.exclude_locations.value)
-            maximum_supply = _base_location_supply(world) + len(TROPHY_TRACKS) * 5
-            progressive_capability.raise_if_capability_items_exceed_location_supply(
-                world, available_supply=max(
-                    0, maximum_supply - (total_demand - capability_added)))
+def flex_locations(world) -> Optional[str]:
+    total_locations_needed = needed_locations(world)
+    remaining_locations_needed = total_locations_needed
+
+    world.podium_rungs = required_categories(world, remaining_locations_needed)
+    podium_locations = _locations_given_rungs(world.podium_rungs)
+    remaining_locations_needed -= podium_locations
+
+    world.box_count = required_boxes(world, remaining_locations_needed)
+    remaining_locations_needed -= world.box_count
+
+
+    if remaining_locations_needed > 0:  # could not assign all locations
+        item_data = item_supply.compute_item_pool_data(world)
+        item_names = item_data["pool_names"]
+        dynamic_items = item_data["dynamic_item_count"]
+
         raise OptionError(
-            "CTR: the current mandatory item pool exceeds the full five-category "
-            "Podium Rung ladder. Disable an item-pool option or add a live "
-            "location class; the rung sizer cannot create more than 80 locations.")
-    if current >= target:
-        return _locations_with_categories(target)
-    if not bool(world.options.podium_placement_checks.value):
-        raise OptionError(
-            "CTR: this seed needs more Podium Rung capacity, but Podium Placement "
-            "Checks is off. The adaptive sizer never enables that master toggle; "
-            "turn it on, or reduce the enabled item-pool options -- the usual "
-            "candidates are Character Unlocks (15 items, set 'character_unlocks' "
-            "to false for all-unlocked mode), Progressive Stats (12) and "
-            "Progressive Boost (2-3). All three add pool items without adding "
-            "any locations of their own.")
-    raise OptionError(
-        f"CTR: this seed needs at least {target} Podium Rung categories, but "
-        f"the YAML selects {current}. CTR will not turn disabled rung options "
-        "back on. Enable more podium rung subcategories, enable another "
-        "location family such as Item Box Locations, or reduce item-pool "
-        "options such as Progressive Boost or Progressive Stats.")
+            "CTR: the current mandatory item pool exceeds the current available "
+            "location pool. Reduce the amount of items or increase the amount of locations. "
+            f"Need {remaining_locations_needed} more locations for "
+            f"{len(item_names) + dynamic_items} unassigned items: {item_names} "
+            f"(+{dynamic_items} dynamic items)")

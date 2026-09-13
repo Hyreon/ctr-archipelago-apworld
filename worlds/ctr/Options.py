@@ -1171,10 +1171,20 @@ class UseAllBoxLocations(DefaultOnToggle):
     would introduce to the multiworld."""
     display_name = "Use All Archipelago Box Locations"
 
-class UseTerrainModifiers(Toggle):
-    """When enabled, 5 global terrain modifiers will be added to the pool.
-    Once acquired, these allow you to ignore the effects of one of: ice, snow, dirt, grass, water."""
+
+class UseTerrainModifiers(Choice):
+    """Controls the 5 global terrain modifiers (Ignore Ice/Snow/Dirt/Grass/Water).
+    - off: never added to the pool.
+    - on: always added; if there isn't room, generation fails rather than
+      silently dropping them.
+    - filler: added opportunistically when there's room to spare, and
+      silently dropped under overflow pressure -- never a reason
+      generation fails."""
     display_name = "Use Terrain Modifiers"
+    option_off = 0
+    option_on = 1
+    option_filler = 2
+    default = 2
 
 
 class ExpectedFiller(Range):
@@ -1182,13 +1192,12 @@ class ExpectedFiller(Range):
 
     If there are more mandatory locations than mandatory items, there will be more filler.
 
-    There can and have been off-by-one errors during generation. If this happens, there will be less filler.
-
-    Note that setting this to low amounts of filler may cause generation to fail."""
+    There can and have been off-by-one errors during generation.
+    If this happens, there will be less filler."""
     display_name = "Required Filler Locations"
     range_start = 0
-    range_end = 100
-    default = 1
+    range_end = 400
+    default = 0
 
 @dataclass
 class ctrAPOptions(PerGameCommonOptions):
@@ -1223,6 +1232,10 @@ class ctrAPOptions(PerGameCommonOptions):
     wumpa_check: WumpaCheck
     # in-race Turbo hand-out (#224), the second ruled namespace amendment
     turbo_grant: TurboGrant
+    # filler checks (other)
+    use_all_boxes: UseAllBoxLocations
+    expected_filler: ExpectedFiller
+    use_terrain_modifiers: UseTerrainModifiers
     lettersanity: Lettersanity
     letters_per_track: LettersPerTrack
     # authored item-box checks (#109)
@@ -1259,10 +1272,6 @@ class ctrAPOptions(PerGameCommonOptions):
     podium_any_position_rung: PodiumAnyPositionRung
     podium_held_rungs: PodiumHeldRungs
     podium_held_fifth_rung: PodiumHeldFifthRung
-    # extra location checks (other)
-    use_all_boxes: UseAllBoxLocations
-    expected_filler: ExpectedFiller
-    use_terrain_modifiers: UseTerrainModifiers
     # quality of life
     one_lap_cups: OneLapCups
     # deathlink
@@ -1296,15 +1305,15 @@ ap_ctr_option_groups: Dict[str, List[Any]] = {
                          RandomizeGemCupTracks, CustomTracks],
     # The "how long is this seed" decisions, together, because they are read
     # against each other rather than one at a time.
-    "Extra Checks": [BoxLocations, ShortcutKnowledge, Itemsanity,
-                     Lettersanity, LettersPerTrack,
+    "Extra Checks": [BoxLocations, UseAllBoxLocations, ShortcutKnowledge,
+                     Itemsanity, Lettersanity, LettersPerTrack,
                      SlideColiseumRaces, TurboTrackRaces,
                      PodiumPlacementChecks, PodiumFinishRungs,
                      PodiumAnyPositionRung, PodiumHeldRungs,
                      PodiumHeldFifthRung],
     "Items & Pool": [ShuffleGems, ShuffleKeys, TrapFillPercentage, TrapWeights,
                      TiziHelper, WumpaBundles, ProgressiveStartingWumpa,
-                     WumpaCheck, TurboGrant],
+                     WumpaCheck, TurboGrant, ExpectedFiller, UseTerrainModifiers],
     "Capability Items": [ProgressiveBoostMode, ProgressiveBoostBlueFire,
                          ProgressiveStatsMode, LogicDifficulty],
     # Grouped together on purpose: a player reads "who do I start as", "who can

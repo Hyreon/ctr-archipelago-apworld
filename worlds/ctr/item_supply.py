@@ -18,6 +18,9 @@ pack is now toggleable like the Turbo Grant or Tizi Helper, and there is an
 overabundance of checks from item boxes, a new ruling is needed. The comfort
 pack is no longer quietly disabled when the user has it on, and can now be
 disabled by the user when they want to avoid it in their seed.
+If the user actually does not care, then the item may still be added
+opportunistically in place of other filler items; but it is not added
+to the pool only to be removed later.
 
 THE ORDER IS RULED (Hyreon, 2026-09-12), not a preference:
 
@@ -65,6 +68,7 @@ from BaseClasses import Item, ItemClassification
 
 import json
 import pkgutil
+from collections import defaultdict
 
 from .Items import load_item_table
 from .Options import (OxideGoal)
@@ -89,7 +93,6 @@ SURFACE_ITEM_NAMES = frozenset({
 
 
 def shed_overflow(pool: Sequence[Item], unfilled: int,
-                  surface_item_names: Iterable[str],
                   filler_floor: int = 0) -> List[Item]:
     """Return the pool reduced toward `unfilled`, in the ruled order.
 
@@ -106,8 +109,6 @@ def shed_overflow(pool: Sequence[Item], unfilled: int,
     """
     if len(pool) <= unfilled:
         return list(pool)
-
-    surface_names = frozenset(surface_item_names)
 
     # Tier 1: filler, exactly as much as the overflow needs and no more, and
     # never below the floor the excluded locations require.
@@ -126,9 +127,6 @@ def shed_overflow(pool: Sequence[Item], unfilled: int,
         kept.append(item)
     pool = kept
 
-    if len(pool) <= unfilled:
-        return pool
-
     return pool
 
 def compute_item_pool_data(world):
@@ -137,6 +135,9 @@ def compute_item_pool_data(world):
     per the caller's own instruction), no location is touched, no
     world/multiworld attribute is mutated. Every real commitment is
     returned as plain data for apply_item_pool_data to act on.
+
+    Padding sets like the Ignore Terrain items are not part of the mandatory
+    item pool. The world will attempt to create them if there's room to spare.
 
     This does not serve as a guarantee of what the actual item pool will
     look like. Random values and custom constraints may change what
@@ -153,7 +154,8 @@ def compute_item_pool_data(world):
         "locked_placements": {},    # {location_name: item_name}
         "pool_names": [],           # [item_name, ...] -- general pool, NAMES only
         "precollected": None,       # item_name for starting character
-        "dynamic_item_count": 0
+        "padding_sets": defaultdict(list),  # {group: [item_name, ...], ...}
+        "dynamic_item_count": 0     # estimated number of untracked items
     }
 
     # Vanilla-fill lever 2: seat the 4 hub-backbone Keys early.
@@ -197,6 +199,7 @@ def compute_item_pool_data(world):
 
     pool_names = []
     for item in load_item_table():
+        padding_group = None
         if _GEM_GOAL and not world.options.shuffle_gems.value and item["name"] in _GEMS:
             continue
         count = item["count"]
@@ -207,7 +210,10 @@ def compute_item_pool_data(world):
         if world.options.itemsanity.value and item["name"] in ITEM_NAMES:
             count = 1
         if item["name"] in SURFACE_ITEM_NAMES:
-            count = 1 if world.options.use_terrain_modifiers else 0
+            _terrain_mode = int(world.options.use_terrain_modifiers.value)
+            count = 1 if _terrain_mode in (1, 2) else 0
+            if _terrain_mode == 2:
+                padding_group = "SURFACE_ITEM"
         if item["name"] == TIZI_HELPER_ITEM:
             count = tizi_helper.created_item_count(world)
         if item["name"] in _wumpa_counts:
@@ -231,7 +237,10 @@ def compute_item_pool_data(world):
         if item["name"] in _cups_locked:
             count = max(0, count - _cups_locked[item["name"]])
         if count > 0:
-            pool_names.extend([item["name"]] * count)
+            if padding_group is None:
+                pool_names.extend([item["name"]] * count)
+            else:
+                result["padding_sets"][padding_group].extend([item["name"]] * count)
 
     result["precollected"] = characters.unlock_item_name(world.ctr_starting_character)
     pool_names.extend(characters.created_unlock_names(world))
@@ -242,8 +251,10 @@ def compute_item_pool_data(world):
     # apply_item_pool_data.
     pool_names.extend(CUSTOM_LETTERSANITY_CLASS.created_item_names(world.options))
 
-    result["dynamic_item_count"] = sum(progressive_capability.created_item_counts(world).values())
+    # dynamic items that will be / might be generated on the fly
+    result["dynamic_item_count"] += sum(progressive_capability.created_item_counts(world).values())
 
     result["pool_names"] = pool_names
+    result["padding_sets"] = dict(result["padding_sets"]) # flatten to dict and not defaultdict for safety
 
     return result

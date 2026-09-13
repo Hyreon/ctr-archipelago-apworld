@@ -1339,7 +1339,7 @@ class ctrAPWorld(World):
 
         unfilled = len(mw.get_unfilled_locations(player))
         pool = item_supply.shed_overflow(
-            pool, unfilled, item_supply.SURFACE_ITEM_NAMES, filler_floor=estimated_filler_reserve(self))
+            pool, unfilled, data["padding_sets"], filler_floor=estimated_filler_reserve(self))
 
         # --- Progressive Boost / Progressive Stats item packs (issues #12,
         # #13/#252). Classification is resolved per seed in create_item from
@@ -1365,7 +1365,9 @@ class ctrAPWorld(World):
     def create_items(self):
         player = self.player
         mw = self.multiworld
-        pool, unfilled = self.apply_item_pool_data(item_supply.compute_item_pool_data(self))
+
+        data = item_supply.compute_item_pool_data(self)
+        pool, unfilled = self.apply_item_pool_data(data)
 
         if int(self.options.lettersanity.value) == 3 and len(pool) > unfilled:
             raise OptionError(
@@ -1429,6 +1431,15 @@ class ctrAPWorld(World):
         # every multi-CTR generation with a filler-needing config. Solo unchanged
         # (there len(pool) == len(mw.itempool)).
         n_filler = max(0, unfilled - len(pool))
+
+        # First, fill with the padding_sets that are available
+        for group in sorted(data["padding_sets"]):  # prioritized by name for now
+            padding_set = data["padding_sets"][group]
+            if n_filler >= len(padding_set):
+                for item_name in padding_set:
+                    mw.itempool.append(self.create_item(item_name))
+                    n_filler -= 1
+
         # Trap fill: replace trap_fill_percentage% of the filler slots with traps,
         # drawn against the player's trap_weights (#280 -- the uniform v1 draw is
         # gone). Traps are non-progression, so this never changes reachability at

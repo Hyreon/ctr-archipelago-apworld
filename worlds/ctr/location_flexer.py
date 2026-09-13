@@ -23,7 +23,7 @@ from typing import Iterable, Optional, Tuple
 
 from Options import OptionError
 
-from .podium import PODIUM_CLASS, TROPHY_TRACKS, enabled_trophy_tracks, created_rung_keys
+from .podium import PODIUM_CLASS, enabled_trophy_tracks, created_rung_keys
 from . import item_supply
 from .elastic_bounds import predicted_goal_excluded_reserve
 from .Locations import CTR_LOCATION_CLASSES, _LOCATION_DATA
@@ -178,7 +178,7 @@ def needed_locations(world):
     base -= len(world.options.exclude_locations.value)
     return demand - base
 
-def _locations_given_rungs(categories):
+def _locations_given_rungs(world, categories):
     return len(enabled_trophy_tracks(world.options)) * categories
 
 def required_boxes(world, remaining_locations_needed) -> Optional[int]:
@@ -198,7 +198,7 @@ def required_categories(world, remaining_locations_needed) -> Optional[int]:
     flex_locations allows consideration for locations already ruled part of the game.
     """
     minimum = next((categories for categories in range(6)
-                    if remaining_locations_needed <= _locations_given_rungs(categories)), None)
+                    if remaining_locations_needed <= _locations_given_rungs(world, categories)), None)
 
     desired_rungs = category_count(world.options)
 
@@ -208,33 +208,12 @@ def required_categories(world, remaining_locations_needed) -> Optional[int]:
     return min(minimum, category_count(world.options))
 
 
-def _new_name_count(current: RungLayout, candidate: RungLayout) -> int:
-    return _locations_given_rungs(len(set(candidate.keys) - set(current.keys)))
-
-
-def _held_category_count(layout: RungLayout) -> int:
-    return (2 if layout.held else 0) + (1 if layout.held and layout.held_fifth else 0)
-
-
-def _select_layout(options, target: int) -> Optional[RungLayout]:
-    current = _layout_from_values(_raw_values(options))
-    candidates = [row for row in rows_reachable_from(options)
-                  if row.categories >= target]
-    if not candidates:
-        return None
-    return min(candidates, key=lambda row: (
-        row.categories,
-        _new_name_count(current, row),
-        -_held_category_count(row),
-    ))
-
-
 def flex_locations(world) -> Optional[str]:
     total_locations_needed = needed_locations(world)
     remaining_locations_needed = total_locations_needed
 
     world.podium_rungs = required_categories(world, remaining_locations_needed)
-    podium_locations = _locations_given_rungs(world.podium_rungs)
+    podium_locations = _locations_given_rungs(world, world.podium_rungs)
     remaining_locations_needed -= podium_locations
 
     world.box_count = required_boxes(world, remaining_locations_needed)

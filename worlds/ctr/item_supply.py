@@ -67,6 +67,7 @@ import json
 import pkgutil
 
 from .Items import load_item_table
+from .Options import (OxideGoal)
 from .itemsanity import WEAPONS, ITEM_NAMES
 from .custom_lettersanity import CUSTOM_LETTER_ITEM_DATA, CUSTOM_LETTERSANITY_CLASS
 from .relic_tiers import RELIC_TIERS
@@ -199,8 +200,8 @@ def compute_item_pool_data(world):
             continue
         count = item["count"]
         if (item["name"] == "Wumpa Fruit" and
-                self.options.oxide_goal.value == OxideGoal.option_101_percent and
-                self.options.oxide_1_optional.value == 2):
+                world.options.oxide_goal.value == OxideGoal.option_101_percent and
+                world.options.oxide_1_optional.value == 2):
             count = max(0, count - 1)  # existing copy locked at Oxide 1
         if world.options.itemsanity.value and item["name"] in ITEM_NAMES:
             count = 1
@@ -215,9 +216,9 @@ def compute_item_pool_data(world):
         if int(world.options.lettersanity.value) in (2, 3) and item["name"] in lettersanity.ALL_ITEM_NAMES:
             track = item["name"].rsplit("(", 1)[1][:-1]
             letter = item["name"].split(" ", 2)[1]
-            count = int(track in self.options._lettersanity_selected and
-                        (int(self.options.lettersanity.value) == 3 or
-                            letter in self.options._lettersanity_selected[track]))
+            count = int(track in world.options._lettersanity_selected and
+                        (int(world.options.lettersanity.value) == 3 or
+                            letter in world.options._lettersanity_selected[track]))
         if item["name"] in _relic_locked:
             count = max(0, count - _relic_locked[item["name"]])
         if item["name"] in _gems_locked:

@@ -1339,7 +1339,7 @@ class ctrAPWorld(World):
 
         unfilled = len(mw.get_unfilled_locations(player))
         pool = item_supply.shed_overflow(
-            pool, unfilled, data["padding_sets"], filler_floor=estimated_filler_reserve(self))
+            pool, unfilled, filler_floor=estimated_filler_reserve(self))
 
         # --- Progressive Boost / Progressive Stats item packs (issues #12,
         # #13/#252). Classification is resolved per seed in create_item from

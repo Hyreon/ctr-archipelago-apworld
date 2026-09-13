@@ -23,11 +23,18 @@ from typing import Iterable, Optional, Tuple
 
 from Options import OptionError
 
-from .podium import PODIUM_CLASS, TROPHY_TRACKS, created_rung_keys
+from .podium import PODIUM_CLASS, TROPHY_TRACKS, enabled_trophy_tracks, created_rung_keys
 from . import item_supply
 from .elastic_bounds import predicted_goal_excluded_reserve
 from .Locations import CTR_LOCATION_CLASSES, _LOCATION_DATA
 from .item_boxes import ITEM_BOX_CLASS
+from . import lettersanity
+
+
+def _custom_ctr_slots(world):
+    from .custom_tracks import resolve_custom_tracks
+    return tuple(entry["slot"] for entry in resolve_custom_tracks(world).values()
+                 if entry.get("modes", {}).get("ctr_challenge", False))
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +134,17 @@ def _base_location_supply(world) -> int:
         for location_class in CTR_LOCATION_CLASSES
         if location_class is not PODIUM_CLASS
         and location_class is not ITEM_BOX_CLASS)
-    return static_without_trials + relics + other_classes
+    # Sparse custom classes are populated in create_regions, after sizing.
+    # Predict their admitted checks without drawing a selection or mutating RNG.
+    if not hasattr(world.options, "_custom_ctr_admitted_slots"):
+        slots = len(_custom_ctr_slots(world))
+        other_classes += slots
+        if int(world.options.lettersanity.value) in (1, 2):
+            other_classes += slots * int(world.options.letters_per_track.value)
+    # True-filler first Oxide consumes one real slot with its locked reward.
+    locked_first = int(world.options.oxide_goal.value == 2 and
+                       world.options.oxide_1_optional.value == 2)
+    return static_without_trials + relics + other_classes - locked_first
 
 
 def predicted_mandatory_pool(world) -> int:
@@ -162,7 +179,7 @@ def needed_locations(world):
     return demand - base
 
 def _locations_given_rungs(categories):
-    return len(TROPHY_TRACKS) * categories
+    return len(enabled_trophy_tracks(world.options)) * categories
 
 def required_boxes(world, remaining_locations_needed) -> Optional[int]:
     available_boxes = len(ITEM_BOX_CLASS.created_locations(world.options))
@@ -192,7 +209,7 @@ def required_categories(world, remaining_locations_needed) -> Optional[int]:
 
 
 def _new_name_count(current: RungLayout, candidate: RungLayout) -> int:
-    return len(set(candidate.keys) - set(current.keys)) * len(TROPHY_TRACKS)
+    return _locations_given_rungs(len(set(candidate.keys) - set(current.keys)))
 
 
 def _held_category_count(layout: RungLayout) -> int:

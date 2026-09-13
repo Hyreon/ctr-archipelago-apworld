@@ -68,6 +68,7 @@ import pkgutil
 
 from .Items import load_item_table
 from .itemsanity import WEAPONS, ITEM_NAMES
+from .custom_lettersanity import CUSTOM_LETTER_ITEM_DATA, CUSTOM_LETTERSANITY_CLASS
 from .relic_tiers import RELIC_TIERS
 from .tizi_helper import TIZI_HELPER_ITEM
 from .turbo_grant import TURBO_GRANT_ITEM
@@ -197,6 +198,10 @@ def compute_item_pool_data(world):
         if _GEM_GOAL and not world.options.shuffle_gems.value and item["name"] in _GEMS:
             continue
         count = item["count"]
+        if (item["name"] == "Wumpa Fruit" and
+                self.options.oxide_goal.value == OxideGoal.option_101_percent and
+                self.options.oxide_1_optional.value == 2):
+            count = max(0, count - 1)  # existing copy locked at Oxide 1
         if world.options.itemsanity.value and item["name"] in ITEM_NAMES:
             count = 1
         if item["name"] in SURFACE_ITEM_NAMES:
@@ -207,11 +212,12 @@ def compute_item_pool_data(world):
             count = _wumpa_counts[item["name"]]
         if item["name"] == TURBO_GRANT_ITEM:
             count = turbo_grant.created_item_count(world)
-        if int(world.options.lettersanity.value) in (2, 3) and item["name"] in lettersanity.ITEM_NAMES:
+        if int(world.options.lettersanity.value) in (2, 3) and item["name"] in lettersanity.ALL_ITEM_NAMES:
             track = item["name"].rsplit("(", 1)[1][:-1]
             letter = item["name"].split(" ", 2)[1]
-            count = int(int(world.options.lettersanity.value) == 3
-                        or letter in world.options._lettersanity_selected[track])
+            count = int(track in self.options._lettersanity_selected and
+                        (int(self.options.lettersanity.value) == 3 or
+                            letter in self.options._lettersanity_selected[track]))
         if item["name"] in _relic_locked:
             count = max(0, count - _relic_locked[item["name"]])
         if item["name"] in _gems_locked:
@@ -227,6 +233,12 @@ def compute_item_pool_data(world):
 
     result["precollected"] = characters.unlock_item_name(world.ctr_starting_character)
     pool_names.extend(characters.created_unlock_names(world))
+
+    # Sparse custom letter items follow certified slot selection, not the
+    # positional retail item table. Included alongside the general table's
+    # lettersanity items above, before capacity/overflow checks run in
+    # apply_item_pool_data.
+    pool_names.extend(CUSTOM_LETTERSANITY_CLASS.created_item_names(world.options))
 
     result["dynamic_item_count"] = sum(progressive_capability.created_item_counts(world).values())
 

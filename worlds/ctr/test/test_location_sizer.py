@@ -10,7 +10,7 @@ import unittest
 from Options import OptionError
 from test.general import setup_multiworld
 
-from .. import ctrAPWorld, podium, progressive_capability, rung_sizer, traps
+from .. import ctrAPWorld, podium, progressive_capability, location_sizer, traps
 from ..elastic_bounds import (goal_excluded_location_reserve,
                                predicted_goal_excluded_reserve)
 from ..Options import OxideGoal
@@ -35,16 +35,16 @@ class TestRungLadder(unittest.TestCase):
     def test_all_nine_effective_rows_have_the_ruled_category_count(self):
         expected = (0, 1, 2, 2, 3, 3, 4, 4, 5)
         self.assertEqual(
-            tuple(row.categories for row in rung_sizer.RUNG_LADDER), expected)
+            tuple(row.categories for row in location_sizer.RUNG_LADDER), expected)
 
     def test_category_count_honours_the_master_toggle(self):
         options = _Options(master=False, finish=True, any_position=True,
                            held=True, fifth=True)
-        self.assertEqual(rung_sizer.category_count(options), 0)
+        self.assertEqual(location_sizer.category_count(options), 0)
 
     def test_reachable_rows_never_disable_an_inert_child_toggle(self):
         options = _Options(master=True, finish=False, any_position=True)
-        self.assertTrue(all(row.any_position for row in rung_sizer.rows_reachable_from(options)))
+        self.assertTrue(all(row.any_position for row in location_sizer.rows_reachable_from(options)))
 
 
 class TestRungSizingGeneration(unittest.TestCase):
@@ -58,9 +58,9 @@ class TestRungSizingGeneration(unittest.TestCase):
         world.options.progressive_boost.value = 1
         world.settings.allow_rung_sizing = True
         with self.assertRaises(OptionError) as ctx:
-            rung_sizer.apply_rung_sizing(world)
+            location_sizer.apply_rung_sizing(world)
         self.assertIn("will not turn disabled rung options back on", str(ctx.exception))
-        self.assertEqual(rung_sizer.category_count(world.options), 0)
+        self.assertEqual(location_sizer.category_count(world.options), 0)
         self.assertFalse(world.options.podium_held_rungs.value)
         self.assertFalse(world.options.podium_held_fifth_rung.value)
         self.assertFalse(world.options.podium_finish_rungs.value)
@@ -93,7 +93,7 @@ class TestRungSizingGeneration(unittest.TestCase):
                 "box_locations": True,
             })
         world = mw.worlds[1]
-        self.assertEqual(rung_sizer.category_count(world.options), 2)
+        self.assertEqual(location_sizer.category_count(world.options), 2)
         self.assertFalse(world.options.podium_held_rungs.value)
         self.assertFalse(world.options.podium_held_fifth_rung.value)
 
@@ -101,10 +101,10 @@ class TestRungSizingGeneration(unittest.TestCase):
         mw = setup_multiworld(ctrAPWorld, seed=712)
         world = mw.worlds[1]
         before = tuple(getattr(world.options, name).value
-                       for name in rung_sizer._TOGGLE_NAMES)
-        self.assertIsNone(rung_sizer.apply_rung_sizing(world))
+                       for name in location_sizer._TOGGLE_NAMES)
+        self.assertIsNone(location_sizer.apply_rung_sizing(world))
         after = tuple(getattr(world.options, name).value
-                      for name in rung_sizer._TOGGLE_NAMES)
+                      for name in location_sizer._TOGGLE_NAMES)
         self.assertEqual(after, before)
 
     def test_master_toggle_is_never_enabled(self):
@@ -129,9 +129,9 @@ class TestRungSizingGeneration(unittest.TestCase):
         world.options.progressive_boost.value = 1
         world.settings.allow_rung_sizing = False
         with self.assertRaises(OptionError) as ctx:
-            rung_sizer.apply_rung_sizing(world)
+            location_sizer.apply_rung_sizing(world)
         self.assertIn("will not turn disabled rung options back on", str(ctx.exception))
-        self.assertEqual(rung_sizer.category_count(world.options), 0)
+        self.assertEqual(location_sizer.category_count(world.options), 0)
 
     def test_prediction_matches_live_non_filler_pool_across_option_matrix(self):
         matrices = (
@@ -159,11 +159,11 @@ class TestRungSizingGeneration(unittest.TestCase):
             with self.subTest(options=options):
                 mw = setup_multiworld(ctrAPWorld, seed=seed, options=options)
                 world = mw.worlds[1]
-                expected = rung_sizer.predicted_mandatory_pool(world)
+                expected = location_sizer.predicted_mandatory_pool(world)
                 actual = sum(
                     1 for item in mw.itempool if item.player == world.player
                     and item.name != "Wumpa Fruit"
-                    and item.name not in rung_sizer._SURFACE_ITEM_NAMES
+                    and item.name not in location_sizer._SURFACE_ITEM_NAMES
                     and item.name not in traps.ALL_TRAP_ITEM_NAMES)
                 self.assertEqual(actual, expected)
 
@@ -227,15 +227,15 @@ class TestRungSizingGeneration(unittest.TestCase):
             options={"oxide_goal": "disabled", "bosses_required_goal": 4})
         world = mw.worlds[1]
         self.assertEqual(predicted_goal_excluded_reserve(world.options), 0)
-        base = rung_sizer._base_location_supply(world)
+        base = location_sizer._base_location_supply(world)
         ceiling = base + len(podium.TROPHY_TRACKS) * 5
-        mandatory = rung_sizer.predicted_mandatory_pool(world)
+        mandatory = location_sizer.predicted_mandatory_pool(world)
         pad_to_ceiling = ceiling - mandatory
         self.assertGreater(pad_to_ceiling, 0)
         world.options.exclude_locations.value = frozenset(
             f"synthetic exclude {i}" for i in range(pad_to_ceiling))
         # Exact boundary: demand == ceiling. The fixed reserve (0) fits.
-        self.assertEqual(rung_sizer.required_categories(world), 5)
+        self.assertEqual(location_sizer.required_categories(world), 5)
         # What the pre-repair reserve (1 for `disabled`) would have computed:
         # one location past every reachable category, i.e. rejected.
         buggy_demand = mandatory + 1 + pad_to_ceiling
@@ -250,17 +250,17 @@ class TestRungSizingGeneration(unittest.TestCase):
             options={"oxide_goal": "any_percent"})
         world_goal = mw_goal.worlds[1]
         self.assertEqual(predicted_goal_excluded_reserve(world_goal.options), 1)
-        base_goal = rung_sizer._base_location_supply(world_goal)
+        base_goal = location_sizer._base_location_supply(world_goal)
         ceiling_goal = base_goal + len(podium.TROPHY_TRACKS) * 5
-        mandatory_goal = rung_sizer.predicted_mandatory_pool(world_goal)
+        mandatory_goal = location_sizer.predicted_mandatory_pool(world_goal)
         pad_goal = ceiling_goal - mandatory_goal - 1
         self.assertGreater(pad_goal, 0)
         world_goal.options.exclude_locations.value = frozenset(
             f"synthetic exclude {i}" for i in range(pad_goal))
-        self.assertEqual(rung_sizer.required_categories(world_goal), 5)
+        self.assertEqual(location_sizer.required_categories(world_goal), 5)
         world_goal.options.exclude_locations.value = frozenset(
             f"synthetic exclude {i}" for i in range(pad_goal + 1))
-        self.assertIsNone(rung_sizer.required_categories(world_goal))
+        self.assertIsNone(location_sizer.required_categories(world_goal))
 
     def test_supply_poor_per_character_gets_numeric_capability_error(self):
         with self.assertRaises(OptionError) as ctx:

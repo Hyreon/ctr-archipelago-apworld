@@ -22,7 +22,7 @@ from BaseClasses import ItemClassification
 
 from ..Items import load_item_table
 from ..Locations import CTR_LOCATION_CLASSES
-from .. import rung_sizer
+from .. import location_sizer
 from ..tizi_helper import TIZI_HELPER_CODE
 from ..turbo_grant import (
     RULED_MASK_SIBLING,
@@ -129,10 +129,10 @@ class TestTurboGrantOn(CTRTestBase):
         slot_data = self.world.fill_slot_data()
         self.assertTrue(slot_data["ctr_options"]["turbo_grant"])
 
-    def test_the_rung_sizer_counts_the_supply_spend(self) -> None:
-        with_grant = rung_sizer.predicted_mandatory_pool(self.world)
+    def test_the_location_sizer_counts_the_supply_spend(self) -> None:
+        with_grant = location_sizer.predicted_mandatory_pool(self.world)
         self.world.options.turbo_grant.value = 0
-        without_grant = rung_sizer.predicted_mandatory_pool(self.world)
+        without_grant = location_sizer.predicted_mandatory_pool(self.world)
         self.assertEqual(with_grant, without_grant + 1)
 
 

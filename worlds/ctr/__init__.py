@@ -34,7 +34,7 @@ from .Options import (ctrAPOptions, OxideGoal, FinalOxideUnlock,
                       create_option_groups)
 from . import characters
 from . import progressive_capability
-from . import location_flexer
+from . import location_sizer
 from .spoiler_pad_map import changed_pad_destination_rows
 from . import version
 from .Regions import create_regions
@@ -503,7 +503,7 @@ class ctrAPWorld(World):
         self.ctr_starting_character = characters.resolve_starting_character(self)
         from . import forced_options
         forced_options.apply(self)
-        location_flexer.flex_locations(self)
+        location_sizer.flex_locations(self)
 
     def create_regions(self):
         create_regions(self)

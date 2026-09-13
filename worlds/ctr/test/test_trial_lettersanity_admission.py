@@ -28,19 +28,19 @@ class TestTrialLettersanityAdmission(unittest.TestCase):
                          {k: set(v) for k, v in before.items()})
 
     def test_sizer_counts_activated_trial_and_retail_letter_items(self):
-        from .. import rung_sizer
+        from .. import location_sizer
         baseline = None
         for mode, expected in (("off", 0), ("locations_and_items", 36), ("items_only", 54)):
             world = _build(lettersanity=mode, letters_per_track=2,
                            slide_coliseum_races=2, turbo_track_races=2).worlds[1]
-            predicted = rung_sizer.predicted_mandatory_pool(world)
+            predicted = location_sizer.predicted_mandatory_pool(world)
             if baseline is None:
                 baseline = predicted
             self.assertEqual(predicted - baseline, expected)
 
     def test_sizer_counts_custom_demand_before_regions_without_rng(self):
         import copy
-        from .. import rung_sizer
+        from .. import location_sizer
         from ..custom_tracks import BABY_T_PARK_EXAMPLE
         from .. import ctrAPWorld
         from test.general import setup_multiworld
@@ -54,15 +54,15 @@ class TestTrialLettersanityAdmission(unittest.TestCase):
                                                "custom_tracks": {"baby-t-park": descriptor}})
                 world = mw.worlds[1]
                 rng = world.random.getstate()
-                demand = rung_sizer.predicted_mandatory_pool(world)
-                supply = rung_sizer._base_location_supply(world)
+                demand = location_sizer.predicted_mandatory_pool(world)
+                supply = location_sizer._base_location_supply(world)
                 old = world.options.custom_tracks.value
                 disabled = copy.deepcopy(old)
                 disabled["baby-t-park"]["modes"]["ctr_challenge"] = False
                 world.options.custom_tracks.value = disabled
-                self.assertEqual(demand - rung_sizer.predicted_mandatory_pool(world), letters)
+                self.assertEqual(demand - location_sizer.predicted_mandatory_pool(world), letters)
                 expected_supply = 1 + (2 if mode in ("locations_only", "locations_and_items") else 0)
-                self.assertEqual(supply - rung_sizer._base_location_supply(world), expected_supply)
+                self.assertEqual(supply - location_sizer._base_location_supply(world), expected_supply)
                 world.options.custom_tracks.value = old
                 self.assertEqual(world.random.getstate(), rng)
 

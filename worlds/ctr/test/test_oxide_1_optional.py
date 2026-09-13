@@ -111,7 +111,7 @@ class TestOxide1Optional(unittest.TestCase):
                 self.assertEqual(rebuilt.worlds[1].options.oxide_1_optional.value, 0)
 
     def test_early_sizer_accounts_for_locked_first_slot(self):
-        from ..rung_sizer import _base_location_supply, predicted_mandatory_pool
+        from ..location_sizer import _base_location_supply, predicted_mandatory_pool
         optional = _build(oxide_goal="final", oxide_1_optional=True, **RELIC_OPTS)
         filler = _build(oxide_goal="final", oxide_1_optional="true_filler", **RELIC_OPTS)
         self.assertEqual(_base_location_supply(filler.worlds[1]),

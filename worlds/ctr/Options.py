@@ -1165,7 +1165,7 @@ class EditableStats(Choice):
     default = 0
 
 
-class UseAllBoxLocations(Toggle):
+class UseAllBoxLocations(DefaultOnToggle):
     """By default, boxes will only be provided for non-filler items.
     With this enabled, ALL boxes will be available, no matter how much filler this
     would introduce to the multiworld."""

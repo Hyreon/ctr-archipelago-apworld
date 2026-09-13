@@ -14,8 +14,7 @@ import unittest
 
 from BaseClasses import Item, ItemClassification
 
-from ..item_supply import shed_overflow
-from .. import SURFACE_ITEM_NAMES
+from ..item_supply import shed_overflow, SURFACE_ITEM_NAMES
 from . import CTRTestBase
 
 

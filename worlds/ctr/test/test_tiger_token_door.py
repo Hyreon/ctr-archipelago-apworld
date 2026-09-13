@@ -42,7 +42,7 @@ class TestTigerTokenDoor(unittest.TestCase):
                             tracker = setup_multiworld(ctrAPWorld, steps=(), seed=999)
                             tracker.re_gen_passthrough = {ctrAPWorld.game: mw.worlds[1].fill_slot_data()}
                             for step in STEPS:
-                                call_all(tracker, step)
+                                call_all(tracker, step)  # AttributeError here
                             for option in ('lettersanity', 'itemsanity'):
                                 self.assertEqual(getattr(tracker.worlds[1].options, option).value,
                                                  getattr(mw.worlds[1].options, option).value)

@@ -73,6 +73,7 @@ from .custom_lettersanity import CUSTOM_LETTER_ITEM_DATA, CUSTOM_LETTERSANITY_CL
 from .relic_tiers import RELIC_TIERS
 from .tizi_helper import TIZI_HELPER_ITEM
 from .turbo_grant import TURBO_GRANT_ITEM
+from .custom_tracks import replacement_trophy_location, resolved_custom_tracks
 from . import tizi_helper
 from . import turbo_grant
 from . import wumpa_family

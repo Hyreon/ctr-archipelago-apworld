@@ -503,7 +503,6 @@ class ctrAPWorld(World):
         self.ctr_starting_character = characters.resolve_starting_character(self)
         from . import forced_options
         forced_options.apply(self)
-        location_sizer.flex_locations(self)
 
     def create_regions(self):
         create_regions(self)

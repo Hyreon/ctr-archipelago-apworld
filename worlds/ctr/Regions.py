@@ -3,6 +3,7 @@ import logging
 import pkgutil
 from BaseClasses import Region, Entrance, EntranceType
 from . import characters
+from . import location_sizer
 from .Locations import create_location
 from .gem_cup_legs import (
     reconstruct_gem_cup_legs_from_wire, resolve_gem_cup_legs, track_to_cups,
@@ -627,6 +628,10 @@ def create_regions(world: "ctrAPWorld"):
         _loc.logic_text = "True"
         _region.locations.append(_loc)
         mw.regions.location_cache[player][_name] = _loc
+
+    # Determine the number of available locations from podiums and from boxes.
+    # This changes based on the custom tracks selected, so those must be loaded first.
+    location_sizer.flex_locations(world)
 
     # Item-box checks (#109) parent to their TRACK's region, which is what
     # hands every box its track's pad-access rules for free (region

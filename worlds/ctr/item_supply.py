@@ -1,4 +1,6 @@
-"""Overflow shedding: what a seed gives up when it has more items than places.
+"""This contains helper functions for defining how items are supplied.
+
+Overflow shedding: what a seed gives up when it has more items than places.
 
 Archipelago requires a seed to end with exactly as many items as unfilled
 locations. CTR normally reaches that by TOP-UP: build the items the seed must
@@ -61,6 +63,27 @@ from typing import Iterable, List, Sequence
 
 from BaseClasses import Item, ItemClassification
 
+import json
+import pkgutil
+
+from .Items import load_item_table
+from .itemsanity import WEAPONS, ITEM_NAMES
+from .relic_tiers import RELIC_TIERS
+from .tizi_helper import TIZI_HELPER_ITEM
+from .turbo_grant import TURBO_GRANT_ITEM
+from . import tizi_helper
+from . import turbo_grant
+from . import wumpa_family
+from . import characters
+from . import lettersanity
+from . import progressive_capability
+
+# Comfort-only issues #14/#15 pack. It stays atomic when a reduced location
+# set cannot host all five, rather than emitting a seed-dependent subset.
+SURFACE_ITEM_NAMES = frozenset({
+    "Ignore Grass", "Ignore Dirt", "Ignore Snow", "Ignore Water", "Ignore Ice",
+})
+
 
 def shed_overflow(pool: Sequence[Item], unfilled: int,
                   surface_item_names: Iterable[str],
@@ -105,33 +128,12 @@ def shed_overflow(pool: Sequence[Item], unfilled: int,
 
     return pool
 
-import json
-import pkgutil
-
-from .Items import load_item_table
-from .itemsanity import WEAPONS, ITEM_NAMES
-from .relic_tiers import RELIC_TIERS
-from .tizi_helper import TIZI_HELPER_ITEM
-from .turbo_grant import TURBO_GRANT_ITEM
-from . import tizi_helper
-from . import turbo_grant
-from . import wumpa_family
-from . import characters
-from . import lettersanity
-from . import progressive_capability
-
-# Comfort-only issues #14/#15 pack. It stays atomic when a reduced location
-# set cannot host all five, rather than emitting a seed-dependent subset.
-SURFACE_ITEM_NAMES = frozenset({
-    "Ignore Grass", "Ignore Dirt", "Ignore Snow", "Ignore Water", "Ignore Ice",
-})
-
 def compute_item_pool_data(world):
-    """Pure. No Item object is constructed (world.create_item is
-    itself a side-effecting call, per the caller's own instruction), no
-    location is touched, no world/multiworld attribute is mutated. Every
-    real commitment is returned as plain data for apply_item_pool_data to
-    act on.
+    """A pure definition for the item pool. No Item object is
+    constructed (world.create_item is itself a side-effecting call,
+    per the caller's own instruction), no location is touched, no
+    world/multiworld attribute is mutated. Every real commitment is
+    returned as plain data for apply_item_pool_data to act on.
 
     This does not serve as a guarantee of what the actual item pool will
     look like. Random values and custom constraints may change what

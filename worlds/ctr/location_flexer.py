@@ -1,4 +1,5 @@
-"""Adaptive podium-rung sizing (issue #71).
+"""Adaptive podium-rung sizing (issue #71) and item-box sizing (Hyreon),
+merged into one descriptively named file.
 
 Podium's four sub-toggles are a parent/child ladder, not a scalar.  This
 module computes the smallest layout that would give the generated pool a spare

@@ -8,7 +8,6 @@ from .warp_pad_logic import DEFAULT_REQUIREMENT_WEIGHTS
 from .traps import (DEFAULT_TRAP_WEIGHTS, TRAP_WEIGHT_KEYS,
                     validate_trap_weights)
 from .custom_tracks import KNOWN_TRACK_IDS, validate_custom_tracks
-import math
 
 
 class OxideGoal(Choice):
@@ -1204,6 +1203,7 @@ class ctrAPOptions(PerGameCommonOptions):
     podium_any_position_rung: PodiumAnyPositionRung
     podium_held_rungs: PodiumHeldRungs
     podium_held_fifth_rung: PodiumHeldFifthRung
+    # extra location checks (other)
     use_all_boxes: UseAllBoxLocations
     expected_filler: ExpectedFiller
     use_terrain_modifiers: UseTerrainModifiers

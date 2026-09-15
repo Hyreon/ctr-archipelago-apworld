@@ -330,6 +330,14 @@ def _log_never_created_excludes(world):
                 f"has no effect.")
 
 
+def sample_preserving_order(rng, population, k):
+    """Random subset of size k, in the SAME relative order as the input."""
+    n = len(population)
+    k = min(k, n)
+    indices = sorted(rng.sample(range(n), k))
+    return [population[i] for i in indices]
+
+
 def create_regions(world: "ctrAPWorld"):
     """Build all regions, exits, and locations from JSON definitions."""
     data = json.loads(
@@ -639,7 +647,6 @@ def create_regions(world: "ctrAPWorld"):
     # item_boxes.created_location_names (placed count + shortcut_knowledge
     # tier); the per-slot item-term rules are installed in Rules.py.
     from .item_boxes import ITEM_BOX_CLASS
-    from Utils import sample_preserving_order
     box_locations = sample_preserving_order(world.random, ITEM_BOX_CLASS.created_locations(opts), world.box_count)
     for _name, _code, _region_name in box_locations:
         _region = region_lookup[_region_name]

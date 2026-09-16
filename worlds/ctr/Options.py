@@ -1166,9 +1166,9 @@ class EditableStats(Choice):
 
 
 class UseAllBoxLocations(DefaultOnToggle):
-    """By default, boxes will only be provided for non-filler items.
-    With this enabled, ALL boxes will be available, no matter how much filler this
-    would introduce to the multiworld."""
+    """With this enabled, ALL boxes will be available, no matter how much filler this
+    would introduce to the multiworld.
+    With this disabled, only enough boxes to fill the multiworld will be created."""
     display_name = "Use All Archipelago Box Locations"
 
 

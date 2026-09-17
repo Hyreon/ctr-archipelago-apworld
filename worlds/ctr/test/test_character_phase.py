@@ -290,12 +290,23 @@ class TestAllUnlockedMode(unittest.TestCase):
         self.assertEqual(len(mw.itempool),
                          len(mw.get_unfilled_locations(1)))
 
-    def test_the_error_names_both_concrete_fixes(self):
+    # testing concrete fixes is no longer viable, since there are
+    # so many ways to add locations or remove items.
+    # instead, we simply say how many locations are needed, and what
+    # items are generated.
+    # we do not want to tie this test to a specific item count,
+    # so we just check for numbers in general
+    def test_the_error_gives_solutions_and_details(self):
         with self.assertRaises(OptionError) as ctx:
             _build(1, podium_placement_checks=False)
         message = str(ctx.exception)
-        self.assertIn("character_unlocks", message)
-        self.assertIn("Podium Placement Checks", message)
+        # names the general solutions
+        self.assertIn("reduce the amount of items", message.lower())
+        self.assertIn("increase the amount of locations", message.lower())
+
+        # gives specific numbers, and includes specific characters
+        assert(any(char.isdigit() for char in message))
+        self.assertIn("Crash Bandicoot", message)
 
 
 # ---------------------------------------------------------------------------

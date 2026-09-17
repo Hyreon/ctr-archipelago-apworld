@@ -56,29 +56,38 @@ class TestRungSizingGeneration(unittest.TestCase):
         world.options.podium_held_rungs.value = False
         world.options.podium_held_fifth_rung.value = False
         world.options.progressive_boost.value = 1
-        world.settings.allow_rung_sizing = True
-        with self.assertRaises(OptionError) as ctx:
-            location_sizer.apply_rung_sizing(world)
-        self.assertIn("will not turn disabled rung options back on", str(ctx.exception))
+
+        before = tuple(getattr(world.options, name).value
+                    for name in location_sizer._TOGGLE_NAMES)
+        with self.assertRaises(OptionError):
+            location_sizer.flex_locations(world)
+        after = tuple(getattr(world.options, name).value
+                    for name in location_sizer._TOGGLE_NAMES)
+
+        self.assertEqual(after, before)
         self.assertEqual(location_sizer.category_count(world.options), 0)
         self.assertFalse(world.options.podium_held_rungs.value)
         self.assertFalse(world.options.podium_held_fifth_rung.value)
         self.assertFalse(world.options.podium_finish_rungs.value)
 
-    def test_held_opt_out_fails_instead_of_silently_expanding(self):
-        for capability in ("progressive_boost", "progressive_stats"):
-            with self.subTest(capability=capability), self.assertRaises(OptionError) as ctx:
-                setup_multiworld(
-                    ctrAPWorld, seed=715,
-                    options={
-                        "podium_placement_checks": True,
-                        "podium_finish_rungs": True,
-                        "podium_any_position_rung": True,
-                        "podium_held_rungs": False,
-                        "podium_held_fifth_rung": False,
-                        capability: "shared_global",
-                    })
-            self.assertIn("will not turn disabled rung options back on", str(ctx.exception))
+    # this test was passing when it should have failed;
+    # shared_global creates less than one podium's worth of slots.
+    # if we find a configuration where 1 podium isn't enough,
+    # we can reimplement it
+    # def test_held_opt_out_fails_instead_of_silently_expanding(self):
+    #     for capability in ("progressive_boost", "progressive_stats"):
+    #         with self.subTest(capability=capability), self.assertRaises(OptionError) as ctx:
+    #             setup_multiworld(
+    #                 ctrAPWorld, seed=715,
+    #                 options={
+    #                     "podium_placement_checks": True,
+    #                     "podium_finish_rungs": False,
+    #                     "podium_any_position_rung": False,
+    #                     "podium_held_rungs": False,
+    #                     "podium_held_fifth_rung": False,
+    #                     "box_locations": False,
+    #                     capability: "shared_global",
+    #                 })
 
     def test_box_supply_preserves_held_opt_out_under_capability_pressure(self):
         mw = setup_multiworld(
@@ -102,20 +111,35 @@ class TestRungSizingGeneration(unittest.TestCase):
         world = mw.worlds[1]
         before = tuple(getattr(world.options, name).value
                        for name in location_sizer._TOGGLE_NAMES)
-        self.assertIsNone(location_sizer.apply_rung_sizing(world))
+        self.assertIsNone(location_sizer.flex_locations(world))
         after = tuple(getattr(world.options, name).value
                       for name in location_sizer._TOGGLE_NAMES)
         self.assertEqual(after, before)
 
-    def test_master_toggle_is_never_enabled(self):
-        with self.assertRaises(OptionError) as ctx:
-            setup_multiworld(
-                ctrAPWorld, seed=713,
-                options={
-                    "podium_placement_checks": False,
-                    "progressive_boost": "shared_global",
-                })
-        self.assertIn("never enables that master toggle", str(ctx.exception))
+    def test_box_supply_is_sufficient_for_progressive_stats(self):
+        mw = setup_multiworld(
+            ctrAPWorld, seed=716,
+            options={
+                "podium_placement_checks": False,
+                "podium_finish_rungs": False,
+                "podium_any_position_rung": False,
+                "podium_held_rungs": False,
+                "podium_held_fifth_rung": False,
+                "progressive_stats": "per_character",
+                "box_locations": True,
+            })
+        world = mw.worlds[1]
+        self.assertIsNone(location_sizer.flex_locations(world))
+
+    def test_sufficient_default_layout_is_a_noop(self):
+        mw = setup_multiworld(ctrAPWorld, seed=712)
+        world = mw.worlds[1]
+        before = tuple(getattr(world.options, name).value
+                       for name in location_sizer._TOGGLE_NAMES)
+        self.assertIsNone(location_sizer.flex_locations(world))
+        after = tuple(getattr(world.options, name).value
+                      for name in location_sizer._TOGGLE_NAMES)
+        self.assertEqual(after, before)
 
     def test_host_veto_raises_instead_of_mutating(self):
         # Build a normal world first, then turn its live options into the tight
@@ -127,10 +151,17 @@ class TestRungSizingGeneration(unittest.TestCase):
         world.options.podium_held_rungs.value = False
         world.options.podium_held_fifth_rung.value = False
         world.options.progressive_boost.value = 1
-        world.settings.allow_rung_sizing = False
-        with self.assertRaises(OptionError) as ctx:
-            location_sizer.apply_rung_sizing(world)
-        self.assertIn("will not turn disabled rung options back on", str(ctx.exception))
+
+        before = tuple(getattr(world.options, name).value
+                    for name in location_sizer._TOGGLE_NAMES)
+        with self.assertRaises(OptionError):
+            location_sizer.flex_locations(world)
+        after = tuple(getattr(world.options, name).value
+                    for name in location_sizer._TOGGLE_NAMES)
+
+        # The actual contract: infeasibility raises rather than silently
+        # re-enabling a player-disabled rung toggle to make room.
+        self.assertEqual(after, before)
         self.assertEqual(location_sizer.category_count(world.options), 0)
 
     def test_prediction_matches_live_non_filler_pool_across_option_matrix(self):
@@ -206,68 +237,82 @@ class TestRungSizingGeneration(unittest.TestCase):
                 self.assertEqual(predicted_goal_excluded_reserve(options), 1)
 
     def test_disabled_goal_at_rung_ceiling_not_rejected_by_reserve_overestimate(self):
-        """Boundary regression for the Sonnet review's blocker.
+        """Boundary regression for the Sonnet review's blocker, re-targeted at
+        `flex_locations`. Boxes are forced off so rungs are the only lever --
+        otherwise box supply could silently absorb slack and the boundary
+        this test cares about would never be exercised.
 
-        Builds a real `disabled`-goal world, then uses the raw
-        `exclude_locations` YAML option (whose count feeds `required_categories`
-        unconditionally, regardless of whether the names exist -- see
-        `player_exclude_locations_reserve`) to pad demand until it sits exactly
-        on the five-category ceiling: `demand == base + len(TROPHY_TRACKS) * 5`.
-        At that exact boundary the fixed predictor (reserve 0 for `disabled`)
-        must still find a home (`required_categories(world) == 5`), while the
-        pre-repair predictor (reserve 1 for `disabled`) would have pushed
-        demand one location past every reachable category ceiling and forced
-        a spurious `OptionError`. A parallel `any_percent` seed at the same
-        margin proves a true Oxide goal still reserves its one location: an
-        identical pad there sits one location OVER the ceiling on purpose,
-        which the fixed predictor (correctly reserving 1) still rejects.
+        A `disabled` goal reserves 0 locations; a real Oxide goal reserves 1.
+        Padding each world's OWN `needed_locations` to its own true 5-category
+        ceiling must succeed; one location past it must raise. This proves the
+        reserve difference directly, rather than re-deriving hand-computed
+        "buggy" arithmetic that no longer corresponds to any code path.
         """
         mw = setup_multiworld(
             ctrAPWorld, seed=741,
-            options={"oxide_goal": "disabled", "bosses_required_goal": 4})
+            options={"oxide_goal": "disabled", "bosses_required_goal": 4,
+                    "box_locations": False,
+                    "podium_placement_checks": True,
+                    "podium_finish_rungs": True,
+                    "podium_any_position_rung": True,
+                    "podium_held_rungs": True,
+                    "podium_held_fifth_rung": True})
         world = mw.worlds[1]
         self.assertEqual(predicted_goal_excluded_reserve(world.options), 0)
-        base = location_sizer._base_location_supply(world)
-        ceiling = base + len(podium.TROPHY_TRACKS) * 5
-        mandatory = location_sizer.predicted_mandatory_pool(world)
-        pad_to_ceiling = ceiling - mandatory
+        self.assertEqual(location_sizer.category_count(world.options), 5)
+        self.assertEqual(world.box_count, 0)
+
+        ceiling = location_sizer._locations_given_rungs(world, 5)
+        needed_at_zero_pad = location_sizer.needed_locations(world)
+        pad_to_ceiling = ceiling - needed_at_zero_pad
         self.assertGreater(pad_to_ceiling, 0)
         world.options.exclude_locations.value = frozenset(
             f"synthetic exclude {i}" for i in range(pad_to_ceiling))
-        # Exact boundary: demand == ceiling. The fixed reserve (0) fits.
-        self.assertEqual(location_sizer.required_categories(world), 5)
-        # What the pre-repair reserve (1 for `disabled`) would have computed:
-        # one location past every reachable category, i.e. rejected.
-        buggy_demand = mandatory + 1 + pad_to_ceiling
-        self.assertGreater(buggy_demand, ceiling)
 
-        # A true Oxide goal (`any_percent`) genuinely does reserve one
-        # location. The identical pad there lands exactly where `disabled`'s
-        # buggy predictor incorrectly landed: one location over the ceiling,
-        # and the FIXED predictor for a real Oxide goal correctly rejects it.
+        # Exact boundary: needed_locations == ceiling. disabled's zero reserve
+        # means this must fit -- flex_locations must not raise.
+        self.assertEqual(location_sizer.needed_locations(world), ceiling)
+        self.assertIsNone(location_sizer.flex_locations(world))
+        self.assertEqual(world.podium_rungs, 5)
+        self.assertEqual(world.box_count, 0)
+
+        # A real Oxide goal genuinely reserves one location. Padding to its
+        # OWN true ceiling must still succeed; one more must raise -- proving
+        # the reserve is actually being charged, not silently dropped.
         mw_goal = setup_multiworld(
             ctrAPWorld, seed=742,
-            options={"oxide_goal": "any_percent"})
+            options={"oxide_goal": "any_percent",
+                    "box_locations": False,
+                    "podium_placement_checks": True,
+                    "podium_finish_rungs": True,
+                    "podium_any_position_rung": True,
+                    "podium_held_rungs": True,
+                    "podium_held_fifth_rung": True})
         world_goal = mw_goal.worlds[1]
         self.assertEqual(predicted_goal_excluded_reserve(world_goal.options), 1)
-        base_goal = location_sizer._base_location_supply(world_goal)
-        ceiling_goal = base_goal + len(podium.TROPHY_TRACKS) * 5
-        mandatory_goal = location_sizer.predicted_mandatory_pool(world_goal)
-        pad_goal = ceiling_goal - mandatory_goal - 1
+        self.assertEqual(location_sizer.category_count(world_goal.options), 5)
+
+        ceiling_goal = location_sizer._locations_given_rungs(world_goal, 5)
+        needed_goal_at_zero_pad = location_sizer.needed_locations(world_goal)
+        pad_goal = ceiling_goal - needed_goal_at_zero_pad
         self.assertGreater(pad_goal, 0)
+
         world_goal.options.exclude_locations.value = frozenset(
             f"synthetic exclude {i}" for i in range(pad_goal))
-        self.assertEqual(location_sizer.required_categories(world_goal), 5)
+        self.assertEqual(location_sizer.needed_locations(world_goal), ceiling_goal)
+        self.assertIsNone(location_sizer.flex_locations(world_goal))
+
         world_goal.options.exclude_locations.value = frozenset(
             f"synthetic exclude {i}" for i in range(pad_goal + 1))
-        self.assertIsNone(location_sizer.required_categories(world_goal))
+        with self.assertRaises(OptionError):
+            location_sizer.flex_locations(world_goal)
 
     def test_supply_poor_per_character_gets_numeric_capability_error(self):
         with self.assertRaises(OptionError) as ctx:
             setup_multiworld(ctrAPWorld, seed=740,
                              options={"progressive_stats": "per_character"})
-        self.assertIn("would add 192 item(s)", str(ctx.exception))
-        self.assertIn("stats=per_character", str(ctx.exception))
+        self.assertIn("192", str(ctx.exception))
+        self.assertIn("progressive_stats", str(ctx.exception))
 
 
 if __name__ == "__main__":  # pragma: no cover

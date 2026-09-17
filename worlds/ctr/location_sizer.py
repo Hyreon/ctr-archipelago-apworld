@@ -189,7 +189,7 @@ def required_boxes(world, remaining_locations_needed) -> Optional[int]:
 
     return max(0, min(remaining_locations_needed, available_boxes))
 
-def required_categories(world, remaining_locations_needed) -> Optional[int]:
+def required_categories(world, remaining_locations_needed = None) -> Optional[int]:
     """Smallest rung-category count that accounts for all needed items.
 
     ``None`` means the full five-category ladder cannot satisfy the current
@@ -197,6 +197,10 @@ def required_categories(world, remaining_locations_needed) -> Optional[int]:
 
     flex_locations allows consideration for locations already ruled part of the game.
     """
+
+    if remaining_locations_needed is None:
+        remaining_locations_needed = needed_locations(world)
+
     minimum = next((categories for categories in range(6)
                     if remaining_locations_needed <= _locations_given_rungs(world, categories)), None)
 

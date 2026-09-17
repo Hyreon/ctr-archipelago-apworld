@@ -45,13 +45,12 @@ This has a number of knock-on effects on other parts of the code, so the scope w
 DISCLAIMERS:
 - Some tests are broken. I'm going to need help with them.
  - Setting `use_all_boxes` to default to true causes tests to break, since it expects specific item boxes. Rather than manually editing each test, I decided to make this default to `false`, even though it is a worse user experience to add so many filler items. Reverting that is beyond my current ability.
- - 24 tests are failing because of the opinionated changes I've made to some core functions.
+ - 16 tests are failing because of the opinionated changes I've made to some core functions.
 - Some documentation contained in the create_items function was lost when transferring it to a pure function. If it is essential context, I can dig it back up.
 
 Once these test cases are fixed, a pull request will be created.
 
 ```
-FAILED worlds/ctr/test/test_character_phase.py::TestAllUnlockedMode::test_the_error_names_both_concrete_fixes - AssertionError: 'character_unlocks' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amount of items or increase the amount of locations. Need 14 more locations for 97 unass...
 FAILED worlds/ctr/test/test_item_supply.py::TestTierOneFillerFirst::test_it_sheds_only_as_much_filler_as_the_overflow_needs - TypeError: '>' not supported between instances of 'frozenset' and 'int'
 FAILED worlds/ctr/test/test_item_supply.py::TestTierOneFillerFirst::test_one_over_sheds_one_filler_and_keeps_the_comfort_pack - TypeError: '>' not supported between instances of 'frozenset' and 'int'
 FAILED worlds/ctr/test/test_item_supply.py::TestTierOneFillerFirst::test_progression_is_never_shed - TypeError: '>' not supported between instances of 'frozenset' and 'int'
@@ -62,19 +61,13 @@ FAILED worlds/ctr/test/test_item_supply.py::TestBundlesJoinTierOneByClassificati
 FAILED worlds/ctr/test/test_item_supply.py::TestFillerFloorForExcludedLocations::test_filler_at_the_floor_is_not_shed - TypeError: shed_overflow() got multiple values for argument 'filler_floor'
 FAILED worlds/ctr/test/test_item_supply.py::TestFillerFloorForExcludedLocations::test_only_filler_above_the_floor_is_shed - TypeError: shed_overflow() got multiple values for argument 'filler_floor'
 FAILED worlds/ctr/test/test_item_supply.py::TestFillerFloorForExcludedLocations::test_the_floor_pushes_the_overflow_down_to_the_comfort_pack - TypeError: shed_overflow() got multiple values for argument 'filler_floor'
-FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_disabled_goal_at_rung_ceiling_not_rejected_by_reserve_overestimate - TypeError: required_categories() missing 1 required positional argument: 'remaining_locations_needed'
-SUBFAILED(capability='progressive_boost') worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_held_opt_out_fails_instead_of_silently_expanding - AssertionError: OptionError not raised
-FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_held_opt_out_fails_instead_of_silently_expanding - AttributeError: '_AssertRaisesContext' object has no attribute 'exception'
-FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_host_veto_raises_instead_of_mutating - AttributeError: module 'worlds.ctr.location_sizer' has no attribute 'apply_rung_sizing'
-FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_legacy_host_opt_in_cannot_override_yaml - AttributeError: module 'worlds.ctr.location_sizer' has no attribute 'apply_rung_sizing'
-FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_master_toggle_is_never_enabled - AssertionError: 'never enables that master toggle' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amount of items or increase the amount of locations. Need 16 more locatio...
-FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_sufficient_default_layout_is_a_noop - AttributeError: module 'worlds.ctr.location_sizer' has no attribute 'apply_rung_sizing'
-FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_supply_poor_per_character_gets_numeric_capability_error - AssertionError: 'would add 192 item(s)' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amount of items or increase the amount of locations. Need 142 more locations for 289...
+FAILED worlds/ctr/test/test_location_sizer.py::TestRungSizingGeneration::test_supply_poor_per_character_gets_numeric_capability_error - AssertionError: 'progressive_stats' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amount o...
 FAILED worlds/ctr/test/test_oxide_1_optional.py::TestOxide1Optional::test_filler_tight_pool_reserves_excluded_reward_with_capabilities - AssertionError: 0 not greater than or equal to 1
-FAILED worlds/ctr/test/test_progressive_capability.py::TestCapabilityPoolOverflowRaises::test_setup_raises_option_error - AssertionError: 'Progressive Boost' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amount of items or increase the amount of locations. Need 29 more locations for 112 unas...
-FAILED worlds/ctr/test/test_progressive_capability.py::TestStatsPerCharacterSupplyPoor::test_raises_option_error - AssertionError: 'would add 192 item(s)' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amount of items or increase the amount of locations. Need 142 more locations for 289...
+FAILED worlds/ctr/test/test_progressive_capability.py::TestCapabilityPoolOverflowRaises::test_setup_raises_option_error - AssertionError: 'Progressive Boost' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amount o...
+FAILED worlds/ctr/test/test_progressive_capability.py::TestStatsPerCharacterSupplyPoor::test_raises_option_error - AssertionError: 'would add 192 item(s)' not found in "CTR: the current mandatory item pool exceeds the current available location pool. Reduce the amou...
 SUBFAILED(mode='locations_and_items') worlds/ctr/test/test_trial_lettersanity_admission.py::TestTrialLettersanityAdmission::test_sizer_counts_custom_demand_before_regions_without_rng - AssertionError: 0 != 2
 SUBFAILED(mode='items_only') worlds/ctr/test/test_trial_lettersanity_admission.py::TestTrialLettersanityAdmission::test_sizer_counts_custom_demand_before_regions_without_rng - AssertionError: 0 != 3
+
 ```
 
 ## racer-lock-dedupe

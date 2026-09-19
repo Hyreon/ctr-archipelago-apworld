@@ -1338,7 +1338,7 @@ class ctrAPWorld(World):
         pool = [self.create_item(name) for name in data["pool_names"]]
 
         unfilled = len(mw.get_unfilled_locations(player))
-        # no longer shedding items; order has been preserved
+        # no longer shedding items, they are added in order
 
         # --- Progressive Boost / Progressive Stats item packs (issues #12,
         # #13/#252). Classification is resolved per seed in create_item from
@@ -1358,6 +1358,8 @@ class ctrAPWorld(World):
                 for _ in range(_cap_count):
                     pool.append(self.create_item(_cap_name))
                     data["dynamic_item_count"] -= 1
+
+        self.add_filler(mw, data["needed_filler"])
 
         return pool, unfilled
 
@@ -1448,16 +1450,7 @@ class ctrAPWorld(World):
         # fill and no world.random draw is taken, so such a seed's spoiler +
         # slot_data are unchanged -- which is also why an all-zero weight table
         # is only an error when the fill is above 0.
-        trap_pct = self.options.trap_fill_percentage.value
-        if trap_pct > 0 and n_filler > 0:
-            n_traps = (n_filler * trap_pct) // 100
-            for trap_name in traps.draw_trap_names(self, n_traps):
-                mw.itempool.append(self.create_item(trap_name))
-            mw.itempool += [self.create_item(wumpa_family.draw_filler_name(self))
-                            for _ in range(n_filler - n_traps)]
-        else:
-            mw.itempool += [self.create_item(wumpa_family.draw_filler_name(self))
-                            for _ in range(n_filler)]
+        self.add_filler(mw, n_filler)
 
         # NOTE: an earlier density-adaptive force-collapse was removed -- CTR's pool
         # is ~98% progression in EVERY config (only ~1 filler item), so a density
@@ -1468,6 +1461,18 @@ class ctrAPWorld(World):
         # count ceilings, the slider-aware relic filter, and the min-2 bootstrap
         # breadth -- all proven to fill 0/5000 randomized two-stage-active configs
         # while keeping real, distinct tier-2 gates on the great majority of pads.
+
+    def add_filler(self, mw, n_filler):
+        trap_pct = self.options.trap_fill_percentage.value
+        if trap_pct > 0 and n_filler > 0:
+            n_traps = (n_filler * trap_pct) // 100
+            for trap_name in traps.draw_trap_names(self, n_traps):
+                mw.itempool.append(self.create_item(trap_name))
+            mw.itempool += [self.create_item(wumpa_family.draw_filler_name(self))
+                            for _ in range(n_filler - n_traps)]
+        else:
+            mw.itempool += [self.create_item(wumpa_family.draw_filler_name(self))
+                            for _ in range(n_filler)]
 
     def gemgoal(self, player, n: int, predicates: List):
         """Gems Required Goal (issue #152, generalized from the legacy

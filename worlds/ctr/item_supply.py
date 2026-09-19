@@ -53,7 +53,8 @@ def compute_item_pool_data(world):
         "pool_names": [],           # [item_name, ...] -- general pool, NAMES only
         "precollected": None,       # item_name for starting character
         "padding_sets": defaultdict(list),  # {group: [item_name, ...], ...}
-        "dynamic_item_count": 0     # estimated number of untracked items
+        "dynamic_item_count": 0,    # estimated number of untracked items
+        "needed_filler": 0
     }
 
     # Vanilla-fill lever 2: seat the 4 hub-backbone Keys early.
@@ -151,6 +152,7 @@ def compute_item_pool_data(world):
 
     # dynamic items that will be / might be generated on the fly
     result["dynamic_item_count"] += sum(progressive_capability.created_item_counts(world).values())
+    result["needed_filler"] = elastic_bounds.estimated_filler_reserve(world)
 
     result["pool_names"] = pool_names
     result["padding_sets"] = dict(result["padding_sets"]) # flatten to dict and not defaultdict for safety

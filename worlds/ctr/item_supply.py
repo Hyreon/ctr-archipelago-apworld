@@ -20,6 +20,7 @@ from . import wumpa_family
 from . import characters
 from . import lettersanity
 from . import progressive_capability
+from . import elastic_bounds
 
 # Comfort-only issues #14/#15 pack. It stays atomic when a reduced location
 # set cannot host all five, rather than emitting a seed-dependent subset.

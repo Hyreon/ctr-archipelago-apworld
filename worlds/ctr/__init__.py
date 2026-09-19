@@ -1338,8 +1338,7 @@ class ctrAPWorld(World):
         pool = [self.create_item(name) for name in data["pool_names"]]
 
         unfilled = len(mw.get_unfilled_locations(player))
-        pool = item_supply.shed_overflow(
-            pool, unfilled, filler_floor=estimated_filler_reserve(self))
+        # no longer shedding items; order has been preserved
 
         # --- Progressive Boost / Progressive Stats item packs (issues #12,
         # #13/#252). Classification is resolved per seed in create_item from
@@ -1410,9 +1409,10 @@ class ctrAPWorld(World):
             raise OptionError(
                 f"CTR: this option combination creates {len(pool) - unfilled} more "
                 f"item(s) than it has locations to hold them ({len(pool)} items, "
-                f"{unfilled} locations). Enable more checks -- item boxes, itemsanity, "
-                "podium rungs or lettersanity locations -- or turn off one of the "
-                "options that add an item without adding a location.")
+                f"{unfilled} locations). Enable more checks (item boxes, itemsanity, "
+                "podium rungs or lettersanity locations_only) or turn off one of the "
+                "options that add an item without adding a location (progressive"
+                "stats, terrain modifiers, or lettersanity items_only)")
 
         mw.itempool += pool
         # Size filler off the UNFILLED locations, i.e. total minus the locations

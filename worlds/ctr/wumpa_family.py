@@ -26,9 +26,7 @@ this family are handled differently:
 
   * The BUNDLES cost NOTHING. They are filler substitutes -- they change WHICH
     filler name lands in a slot the pool was already going to fill, so they
-    never enter the pool as extra demand. They are also `filler`-classified, so
-    the overflow shedder treats them exactly like `Wumpa Fruit`, with no rule
-    of its own (see item_supply.shed_overflow).
+    never enter the pool as extra demand. They are also `filler`-classified.
   * The LADDER costs supply. Every `Progressive Starting Wumpa` copy is one
     more item with no location of its own, exactly like the character unlocks
     and the Tizi Helper, so it must be mirrored into the rung sizer's demand

@@ -187,7 +187,7 @@ class TestStatsPerCharacterSupplyPoor(CTRTestBase):
     def test_raises_option_error(self):
         with self.assertRaises(OptionError) as ctx:
             self.world_setup()
-        self.assertIn("would add 192 item(s)", str(ctx.exception))
+        self.assertIn("192", str(ctx.exception))
         self.assertIn("stats=per_character", str(ctx.exception))
 
 

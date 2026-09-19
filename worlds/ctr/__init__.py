@@ -1359,8 +1359,6 @@ class ctrAPWorld(World):
                     pool.append(self.create_item(_cap_name))
                     data["dynamic_item_count"] -= 1
 
-        self.add_filler(mw, data["needed_filler"])
-
         return pool, unfilled
 
     def create_items(self):
@@ -1415,6 +1413,9 @@ class ctrAPWorld(World):
                 "podium rungs or lettersanity locations_only) or turn off one of the "
                 "options that add an item without adding a location (progressive"
                 "stats, terrain modifiers, or lettersanity items_only)")
+
+        # adds before padding sets are considered
+        self.add_filler(mw, data["needed_filler"])
 
         mw.itempool += pool
         # Size filler off the UNFILLED locations, i.e. total minus the locations

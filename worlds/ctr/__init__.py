@@ -1349,15 +1349,13 @@ class ctrAPWorld(World):
         # freed slots (from omitting the comfort pack) are available to these
         # items too -- `unfilled` is the same live count either block reads,
         # `len(pool)` reflects whatever the trim above already did.
-        _capability_counts = progressive_capability.created_item_counts(self)
-        if _capability_counts:
+        _capability_unlocks = data["dynamic_items"]
+        if _capability_unlocks:
             _capability_supply = unfilled - len(pool)
             progressive_capability.raise_if_capability_items_exceed_location_supply(
                 self, available_supply=_capability_supply)
-            for _cap_name, _cap_count in _capability_counts.items():
-                for _ in range(_cap_count):
-                    pool.append(self.create_item(_cap_name))
-                    data["dynamic_item_count"] -= 1
+            for _cap_name in _capability_unlocks:
+                pool.append(self.create_item(_cap_name))
 
         return pool, unfilled
 

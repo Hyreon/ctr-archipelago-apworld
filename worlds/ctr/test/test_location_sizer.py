@@ -312,7 +312,7 @@ class TestRungSizingGeneration(unittest.TestCase):
             setup_multiworld(ctrAPWorld, seed=740,
                              options={"progressive_stats": "per_character"})
         self.assertIn("192", str(ctx.exception))
-        self.assertIn("progressive_stats", str(ctx.exception))
+        self.assertIn("Progressive Top Speed (Crash Bandicoot)", str(ctx.exception))
 
 
 if __name__ == "__main__":  # pragma: no cover

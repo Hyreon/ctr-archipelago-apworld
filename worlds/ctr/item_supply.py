@@ -54,7 +54,7 @@ def compute_item_pool_data(world):
         "pool_names": [],           # [item_name, ...] -- general pool, NAMES only
         "precollected": None,       # item_name for starting character
         "padding_sets": defaultdict(list),  # {group: [item_name, ...], ...}
-        "dynamic_item_count": 0,    # estimated number of untracked items
+        "dynamic_items": [],    # list of untracked items
         "needed_filler": 0
     }
 
@@ -152,7 +152,8 @@ def compute_item_pool_data(world):
     pool_names.extend(CUSTOM_LETTERSANITY_CLASS.created_item_names(world.options))
 
     # dynamic items that will be / might be generated on the fly
-    result["dynamic_item_count"] += sum(progressive_capability.created_item_counts(world).values())
+    _progressive_counts = progressive_capability.created_item_counts(world)
+    result["dynamic_items"] += [key for key, value in _progressive_counts.items() for _ in range(value)]
     result["needed_filler"] = elastic_bounds.estimated_filler_reserve(world)
 
     result["pool_names"] = pool_names

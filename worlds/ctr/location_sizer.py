@@ -152,7 +152,7 @@ def predicted_mandatory_pool(world) -> int:
     mandatory = sum(
         1 for name in data["pool_names"]
         if name != "Wumpa Fruit"
-    ) + data["dynamic_item_count"]
+    ) + len(data["dynamic_items"])
     return mandatory
 
 
@@ -227,11 +227,11 @@ def flex_locations(world) -> Optional[str]:
     if remaining_locations_needed > 0:  # could not assign all locations
         item_data = item_supply.compute_item_pool_data(world)
         item_names = item_data["pool_names"]
-        dynamic_items = item_data["dynamic_item_count"]
+        dynamic_items = item_data["dynamic_items"]
 
         raise OptionError(
             "CTR: the current mandatory item pool exceeds the current available "
             "location pool. Reduce the amount of items or increase the amount of locations. "
             f"Need {remaining_locations_needed} more locations for "
-            f"{len(item_names) + dynamic_items} unassigned items: {item_names} "
-            f"(+{dynamic_items} dynamic items)")
+            f"{len(item_names) + len(dynamic_items)} unassigned items: {item_names} "
+            f"(including {len(dynamic_items)} dynamic items: {dynamic_items})")

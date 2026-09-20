@@ -188,7 +188,8 @@ class TestStatsPerCharacterSupplyPoor(CTRTestBase):
         with self.assertRaises(OptionError) as ctx:
             self.world_setup()
         self.assertIn("192", str(ctx.exception))
-        self.assertIn("stats=per_character", str(ctx.exception))
+        # displays each item rather than the category
+        self.assertIn("Progressive Top Speed (Crash Bandicoot)", str(ctx.exception))
 
 
 class TestBothPacksPerCharacterRich(CTRTestBase):
